@@ -1,0 +1,175 @@
+AUTOWORK.COM
+Project Blueprint & Development Documentation
+Multi-User Email Automation SaaS Platform
+Pre-Development Blueprint  •  Version 1.1
+Prepared for internal engineering team and client sign-off
+Frontend: Next.js + TypeScript   |   Backend: NestJS + PostgreSQL + Prisma   |   Queue: Redis + BullMQ
+CONFIDENTIAL — DRAFT FOR REVIEW
+
+Table of Contents
+TOC \h \o "1-2"
+
+
+
+1. Executive Summary
+Autowork.com is a multi-user, multi-organization SaaS platform for authorized email automation. Users connect approved sending accounts, import recipient data, build reusable templates with dynamic variables, and run tracked, queue-based email campaigns with real-time progress reporting.
+This document is the pre-development blueprint: it consolidates the frontend build brief and the backend Software Requirements Specification (SRS) into a single reference so that (a) the build can start from a clear, shared structure, (b) any developer joining later can onboard quickly, and (c) the client has a plain-language document to review and sign off on before implementation begins.
+The single most important open item — the identity of the real email provider(s) — is called out separately in Section 11 and must be confirmed by the client before the real provider adapter is built. Development starts with a fake/test provider so frontend, backend, queues and workflows can all be built and demoed in parallel.
+Update (v1.1): the client has confirmed that attachment storage will use the pCloud API. The pCloud adapter should be built now, wired through the same pluggable storage-service interface described in Section 4, and configured entirely through environment variables. The client will send the actual pCloud API keys separately once the rest of the platform is complete — until the keys arrive, the adapter runs against placeholder/env-based credentials so nothing is hard-coded or blocked. See Section 11 for the exact current status of every confirmation item.
+2. Project Overview
+Product: authorized, multi-tenant email automation platform (not a spam tool — every send goes through an authorized, connected sending account).
+Frontend: Next.js (App Router) + TypeScript + Tailwind CSS + shadcn/ui, desktop-first, inspired visually (not functionally or in branding) by pCloud's clean SaaS file-management UI.
+Backend: Node.js + NestJS + PostgreSQL (via Prisma) + Redis/BullMQ for background job processing.
+Core loop: Login → Connect account(s) → Import contacts → Build template → (optional) Attach files → Build campaign → Launch → Background workers send → Live progress + logs.
+Multi-tenant from day one: every resource is scoped to an organization; users and roles sit inside an organization.
+3. Objectives
+Ship a production-structured platform (not a throwaway prototype) with a clean separation between frontend, backend, and the email-provider adapter layer.
+Keep the email-sending provider abstracted behind an adapter interface so the real provider can be swapped in later without reworking the UI or the campaign/queue logic.
+Support multiple authorized sending accounts per organization, with safe account selection that respects provider limits.
+Give users full visibility into campaign progress and results in real time, without needing to refresh the page.
+Produce documentation and a folder structure clear enough that a new developer can be productive within a day.
+4. Scope of Work — v1
+4.1 In scope
+Authentication (register, login, forgot/reset password), protected routes, RBAC (user vs. admin).
+Organization-based multi-tenancy.
+Email account connection UI + backend record-keeping (Connect / Validate / Disconnect / Disable / Delete) — provider-agnostic.
+Contacts and contact lists, with CSV / XLSX / TXT / paste import (upload → preview → column mapping → validation → duplicate detection → confirm).
+Template manager with dynamic variables (#NAME#, #FIRSTNAME#, #LASTNAME#, #EMAIL#, #PHONE#, #COMPANY#, #RANDOM#) and live preview against sample data.
+Optional attachments, stored via a pluggable storage service. CONFIRMED: the storage provider is pCloud, integrated via the pCloud API — built behind the same adapter interface so credentials are the only thing that changes when the client sends its API keys.
+Multi-step campaign builder (details → accounts → recipients → template → attachments → configuration → review → launch).
+Campaign monitoring: list view, detail view, progress bar, live counts (queued / processing / sent / failed / retrying).
+Real-time updates via Socket.IO / WebSockets (job.completed, job.failed, campaign.updated, campaign.completed).
+Automation registry (selectable automations; admin can manage definitions).
+Logs (campaign logs, execution logs, errors) with search, filters and date range.
+Settings (profile, organization, security, notifications) and an Admin Panel (users, organizations, automations, campaigns, system logs, queue/worker health, provider configuration status).
+Swagger/OpenAPI documentation for all backend endpoints; Dockerized local development.
+4.2 Explicitly out of scope for v1 (until confirmed)
+The real email-sending provider adapter (Gmail / Microsoft 365 / SMTP / other) — built only after client confirmation. A fake/test provider stands in until then.
+Live pCloud connectivity — the adapter and integration code are built now, but cannot be tested end-to-end until the client sends the real pCloud API keys.
+Advanced sending-limit / anti-spam rule tuning specific to a provider, since those rules depend on which provider is confirmed.
+5. Technology Stack
+Layer
+Technology
+Frontend
+Next.js (App Router), TypeScript, Tailwind CSS, shadcn/ui, Lucide icons, React Hook Form, Zod, TanStack Query, Zustand (only where needed), centralized Axios/fetch API client, ESLint, Prettier
+Backend
+Node.js, NestJS, PostgreSQL, Prisma ORM
+Queue / Workers
+Redis + BullMQ (separate queues for email, imports, campaigns where useful)
+Realtime
+Socket.IO / WebSockets
+API Docs
+Swagger / OpenAPI at /api/docs
+Storage
+pCloud API — CONFIRMED. Built behind a pluggable storage-service interface; API keys to be supplied by the client separately
+Infra
+Docker + docker-compose for frontend, backend, PostgreSQL, Redis, workers
+6. System Architecture & Folder Structure
+Top-level repository layout — this is the shared map every developer should follow:
+autowork/
+├── frontend/                 Next.js app (App Router)
+│   └── src/app, components, services, hooks, stores, types, lib, utils, constants
+├── backend/                   NestJS app
+│   └── src/auth, users, organizations, dashboard, accounts, contacts, imports,
+│       templates, campaigns, automations, jobs, workers, attachments, storage,
+│       logs, admin, common, config
+├── automation-modules/email/  Provider-agnostic email adapter interface
+│   └── providers/             gmail.adapter.ts, microsoft.adapter.ts, smtp.adapter.ts (added once confirmed)
+├── workers/                    email.worker.ts, import.worker.ts, campaign.worker.ts
+├── prisma/                     schema.prisma, migrations/, seed.ts
+├── docker/                     Dockerfile.frontend, Dockerfile.backend, docker-compose.yml
+└── docs/, .env.example, .gitignore, README.md
+Frontend and backend each keep a clean service layer: the frontend never scatters raw fetch/axios calls inside components (everything goes through src/services/*), and the backend never sends real emails synchronously inside an HTTP request — sends only happen through the Redis/BullMQ queue and a worker.
+7. High-Level Workflow
+7.1 User journey
+Login → Dashboard → Connect authorized email account(s) → Import contacts (CSV/Excel/TXT/paste) → Preview & validate → Create template → Insert variables (#NAME#, #COMPANY#, #RANDOM#, …) → Optional attachment → Create campaign → Select account(s) → Review → Start → Live progress → Logs/report.
+7.2 System / execution flow
+NestJS API creates jobs → Redis/BullMQ queue → Email Worker picks up job → selects an eligible sending account → loads recipient → resolves variables → builds subject/body → loads attachment → calls the Provider Adapter → sends → records the result → updates campaign counters → moves to the next job → campaign completes → results are written to logs and pushed to the UI in real time.
+8. Module Checklist
+Module
+Frontend
+Backend / API
+Worker / External
+Authentication
+Yes
+Yes
+—
+Email Accounts
+Yes
+Yes
+Provider OAuth/API
+Contacts / Import
+Yes
+Yes
+Import Worker
+Templates / Variables
+Yes
+Yes
+—
+Attachments
+Yes
+Yes
+Storage Provider
+Campaigns
+Yes
+Yes
+Queue / Worker
+Email Automation
+Yes
+Yes
+Email Provider
+Logs / Realtime
+Yes
+Yes
+Redis / WebSocket
+Admin
+Yes
+Yes
+—
+9. Development Phases & Sequence
+Phase
+Contents
+Phase 1 — Frontend
+UI layout → Auth → Dashboard → Accounts → Contacts → Imports → Templates → Attachments → Campaign Builder → Logs → Admin (built with mock data first).
+Phase 2 — Backend Foundation
+NestJS → PostgreSQL → Prisma → Auth → RBAC → Organizations → Swagger → Validation → Error handling.
+Phase 3 — Data & Files
+Accounts → Contacts → Lists → Imports → Templates → Variable engine → Attachments → Storage.
+Phase 4 — Campaigns
+Campaign CRUD → Recipient mapping → Account selection → Template/attachment mapping → Validation.
+Phase 5 — Automation
+Redis → BullMQ → Workers → Email Provider Adapter (fake/test first, real once confirmed) → Execution → Logs → Retry/error handling.
+Phase 6 — Production
+Realtime → Admin → Testing → Docker → Security → Monitoring → Backups → Deployment.
+10. Core Data Model (minimum)
+Planned Prisma models: User, Organization, Role, Permission, EmailAccount, Contact, ContactList, ContactListMember, ImportJob, Template, Attachment, Automation, AutomationVersion, Campaign, CampaignRecipient, AutomationJob, EmailExecution, ErrorLog, AuditLog, SystemSetting. Every tenant-owned table carries an organizationId so isolation between organizations is enforced at the query level, not just in the UI.
+11. Client Confirmations — Status
+11.1 Confirmed
+Item
+Client Decision
+Attachment storage provider
+pCloud, via the pCloud API. Build the adapter and full integration now, behind the pluggable storage-service interface.
+pCloud API keys
+To be sent by the client separately, once the rest of the platform is complete. Everything else is to be built in full now — the keys are the only thing being withheld for the moment.
+
+11.2 Still pending
+Everything else can and should proceed. The items below only block the real email-sending integration and must be confirmed before that specific piece is built. Until then, the platform uses a fake/test email provider so the rest of the system (UI, queues, workers, campaigns, logs, and the pCloud integration) can be built, tested and demoed normally.
+Which email provider(s) to support: Gmail / Google Workspace, Microsoft 365 / Outlook, SMTP, another provider, or more than one.
+Connection method: OAuth vs. API token vs. SMTP credentials.
+Expected account-selection / rotation behavior across multiple sending accounts (e.g., round-robin, load-based, manual).
+Permitted sending limits and campaign rules (daily/hourly caps, throttling, anti-spam constraints) as defined by the provider and the client's compliance needs.
+The team will not guess the email provider or build a workaround ahead of this confirmation — the choice changes authentication, provider APIs, limits, account handling and error mapping.
+12. Security Principles
+No secrets (OAuth secrets, API keys, refresh tokens, SMTP passwords) ever ship in frontend source code or logs.
+Access tokens, refresh tokens, passwords and other secrets are never displayed in the UI.
+HTTPS, secure sessions/tokens, password hashing, RBAC, tenant isolation, encrypted provider credentials, file validation, upload limits, rate limiting, audit logs and secure headers throughout.
+13. Definition of Done
+The core platform is considered done when authentication, tenant isolation, dashboard, accounts, contacts/imports, templates, attachments, campaigns, queue infrastructure, logs, admin and the required APIs are implemented, tested and connected end-to-end. The email integration itself is only considered done once the client-approved provider is confirmed, account connection works, jobs process correctly, variables and attachments resolve correctly, results are recorded, provider rules are respected, acceptance tests pass, and documentation is updated.
+14. Next Steps
+Client reviews and signs off on this blueprint.
+Client confirms the remaining Section 11 items (email provider, connection method, limits) and sends the pCloud API keys when ready.
+Engineering begins Phase 1 (Frontend) and Phase 2 (Backend Foundation) in parallel, using a fake/test email provider and the pCloud adapter wired for the keys to drop in.
+Once the remaining Section 11 items are confirmed, the real email provider adapter (Phase 5) is implemented and swapped in without UI or campaign-logic changes.
+Note: the actual step-by-step build instructions used to drive the AI coding agent are kept in a separate execution prompt document, not in this blueprint. This document is the shared reference for scope, structure and decisions; the execution prompt is the operational script handed to the coding tool.
+
+End of document.

@@ -1,0 +1,259 @@
+// Autowork.com - Multi-Tenant Schema Definition
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Organization {
+  id                 String               @id @default(uuid())
+  name               String
+  slug               String               @unique
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  users              User[]
+  roles              Role[]
+  permissions        Permission[]
+  emailAccounts      EmailAccount[]
+  contacts           Contact[]
+  contactLists       ContactList[]
+  importJobs         ImportJob[]
+  templates          Template[]
+  attachments        Attachment[]
+  automations        Automation[]
+  automationVersions AutomationVersion[]
+  campaigns          Campaign[]
+  automationJobs     AutomationJob[]
+  errorLogs          ErrorLog[]
+  auditLogs          AuditLog[]
+}
+
+model Role {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users          User[]
+  permissions    Permission[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Permission {
+  id             String       @id @default(uuid())
+  organizationId String
+  action         String       // read, write, admin
+  resource       String
+  roleId         String?
+  role           Role?        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id             String       @id @default(uuid())
+  email          String       @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  organizationId String
+  roleId         String?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           Role?        @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model EmailAccount {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  email          String
+  provider       String       // fake, gmail, microsoft, smtp
+  status         String       // ACTIVE, PAUSED, INVALID, ERROR
+  dailyLimit     Int          @default(500)
+  sentToday      Int          @default(0)
+  credentials    String       // Encrypted JSON
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Contact {
+  id             String              @id @default(uuid())
+  organizationId String
+  email          String
+  firstName      String?
+  lastName       String?
+  phone          String?
+  company        String?
+  customFields   String?             // JSON string
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships    ContactListMember[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+}
+
+model ContactList {
+  id             String              @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members        ContactListMember[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+}
+
+model ContactListMember {
+  contactId     String
+  contactListId String
+  contact       Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contactList   ContactList @relation(fields: [contactListId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+
+  @@id([contactId, contactListId])
+}
+
+model ImportJob {
+  id             String       @id @default(uuid())
+  organizationId String
+  filename       String
+  status         String       // PENDING, PROCESSING, COMPLETED, FAILED
+  totalRows      Int          @default(0)
+  importedCount  Int          @default(0)
+  failedCount    Int          @default(0)
+  errors         String?      // JSON array of errors
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Template {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  subject        String
+  body           String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaigns      Campaign[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Attachment {
+  id             String       @id @default(uuid())
+  organizationId String
+  filename       String
+  fileSize       Int
+  mimeType       String
+  pcloudFileId   String?
+  pcloudPath     String?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+}
+
+model Automation {
+  id             String              @id @default(uuid())
+  organizationId String
+  name           String
+  status         String              // DRAFT, ACTIVE, PAUSED
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  versions       AutomationVersion[]
+  jobs           AutomationJob[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+}
+
+model AutomationVersion {
+  id           String     @id @default(uuid())
+  automationId String
+  version      Int        @default(1)
+  definition   String     // JSON workflow string
+  automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  createdAt    DateTime   @default(now())
+}
+
+model Campaign {
+  id             String              @id @default(uuid())
+  organizationId String
+  name           String
+  status         String              // DRAFT, QUEUED, PROCESSING, PAUSED, COMPLETED, FAILED
+  templateId     String
+  accountIds     String              // JSON array string
+  totalCount     Int                 @default(0)
+  sentCount      Int                 @default(0)
+  failedCount    Int                 @default(0)
+  template       Template            @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recipients     CampaignRecipient[]
+  executions     EmailExecution[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+}
+
+model CampaignRecipient {
+  id         String   @id @default(uuid())
+  campaignId String
+  contactId  String
+  status     String   // PENDING, QUEUED, SENT, FAILED
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+}
+
+model AutomationJob {
+  id             String       @id @default(uuid())
+  organizationId String
+  automationId   String
+  status         String       // QUEUED, PROCESSING, COMPLETED, FAILED
+  automation     Automation   @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model EmailExecution {
+  id             String   @id @default(uuid())
+  campaignId     String
+  emailAccountId String
+  recipientEmail String
+  status         String   // SUCCESS, FAILED, RETRYING
+  responseMessage String?
+  sentAt         DateTime @default(now())
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
+
+model ErrorLog {
+  id             String        @id @default(uuid())
+  organizationId String?
+  code           String
+  message        String
+  stackTrace     String?
+  context        String?       // JSON string
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime      @default(now())
+}
+
+model AuditLog {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String?
+  action         String
+  resource       String
+  details        String?      // JSON string
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

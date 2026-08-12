@@ -1,0 +1,23 @@
+# Autowork.com Backend Dockerfile
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY backend/package*.json ./
+COPY prisma ./prisma
+RUN npm install
+
+COPY backend/ ./
+COPY automation-modules ./automation-modules
+COPY workers ./workers
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+
+EXPOSE 4000
+CMD ["node", "dist/main"]
