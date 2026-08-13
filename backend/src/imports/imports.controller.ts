@@ -1,38 +1,51 @@
-import { Controller, Get, Post, Body, Param, Req } from '@nestjs/common';
-import { ImportsService, ParseImportPayload, ColumnMappingPayload } from './imports.service';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Body,
+  Request,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ImportsService, ParseImportPayload, ColumnMappingPayload, ConfirmImportPayload } from './imports.service';
 
+@ApiTags('Imports')
+@ApiBearerAuth()
 @Controller('api/v1/imports')
 export class ImportsController {
-  constructor(private readonly importsService: ImportsService) {}
-
-  @Post('upload')
-  async uploadFile(@Body() payload: ParseImportPayload) {
-    return this.importsService.parseFile(payload);
-  }
-
-  @Post('preview')
-  async previewMapping(@Body() payload: ColumnMappingPayload) {
-    return this.importsService.validateMapping(payload);
-  }
-
-  @Post('confirm')
-  async confirmImport(
-    @Req() req: any,
-    @Body() payload: { filename: string; rows: Record<string, string>[]; columnMap: Record<string, string>; listId?: string }
-  ) {
-    const orgId = req.user?.orgId || 'org-101';
-    return this.importsService.confirmImport(orgId, payload);
-  }
+  constructor(private importsService: ImportsService) {}
 
   @Get()
-  async findAll(@Req() req: any) {
+  @ApiOperation({ summary: 'List all import jobs for current tenant' })
+  async findAll(@Request() req: any) {
     const orgId = req.user?.orgId || 'org-101';
-    return this.importsService.findAllByOrg(orgId);
+    return await this.importsService.findAllByOrg(orgId);
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string, @Req() req: any) {
+  @ApiOperation({ summary: 'Get single import job status' })
+  async findOne(@Param('id') id: string, @Request() req: any) {
     const orgId = req.user?.orgId || 'org-101';
-    return this.importsService.findOne(id, orgId);
+    return await this.importsService.findOne(id, orgId);
+  }
+
+  @Post('parse')
+  @ApiOperation({ summary: 'Parse uploaded CSV/TXT file and auto-detect columns' })
+  async parseFile(@Body() payload: ParseImportPayload) {
+    return await this.importsService.parseFile(payload);
+  }
+
+  @Post('validate')
+  @ApiOperation({ summary: 'Validate mapped columns against rows, checking format and duplicates' })
+  async validateMapping(@Body() mapping: ColumnMappingPayload, @Request() req: any) {
+    const orgId = req.user?.orgId || 'org-101';
+    return await this.importsService.validateMapping(orgId, mapping);
+  }
+
+  @Post('confirm')
+  @ApiOperation({ summary: 'Confirm import and create contacts and optional contact list' })
+  async confirmImport(@Body() payload: ConfirmImportPayload, @Request() req: any) {
+    const orgId = req.user?.orgId || 'org-101';
+    return await this.importsService.confirmImport(orgId, payload);
   }
 }

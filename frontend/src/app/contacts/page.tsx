@@ -1,17 +1,29 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Shell } from '@/components/layout/shell';
-import { mockContacts, mockContactLists } from '@/services/mockData';
 import { contactsService } from '@/services/contactsService';
 import { Contact, ContactList } from '@/types';
-import { Users, Plus, Search, FileSpreadsheet, Mail, Phone, Building2, UserPlus } from 'lucide-react';
+import {
+  Users,
+  Plus,
+  Search,
+  FileSpreadsheet,
+  Mail,
+  Phone,
+  Building2,
+  UserPlus,
+  Trash2,
+  FolderSync,
+  Tag,
+} from 'lucide-react';
 import Link from 'next/link';
 
 export default function ContactsPage() {
-  const [contacts, setContacts] = useState<Contact[]>(mockContacts);
-  const [lists, setLists] = useState<ContactList[]>(mockContactLists);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [lists, setLists] = useState<ContactList[]>([]);
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isListModalOpen, setIsListModalOpen] = useState(false);
 
@@ -21,46 +33,83 @@ export default function ContactsPage() {
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [company, setCompany] = useState('');
+  const [target, setTarget] = useState('');
 
   // New List state
   const [listName, setListName] = useState('');
   const [listDesc, setListDesc] = useState('');
 
-  const filteredContacts = contacts.filter((c) => {
-    const q = search.toLowerCase();
-    return (
-      c.email.toLowerCase().includes(q) ||
-      (c.firstName && c.firstName.toLowerCase().includes(q)) ||
-      (c.lastName && c.lastName.toLowerCase().includes(q)) ||
-      (c.company && c.company.toLowerCase().includes(q))
-    );
-  });
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [cnts, lsts] = await Promise.all([
+        contactsService.getAllContacts(search),
+        contactsService.getAllLists(),
+      ]);
+      setContacts(cnts);
+      setLists(lsts);
+    } catch (e) {
+      console.error('Failed to load contacts:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [search]);
 
   const handleCreateContact = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
-    const newC = await contactsService.createContact({
-      email,
-      firstName,
-      lastName,
-      phone,
-      company,
-    });
-    setContacts([newC, ...contacts]);
-    setIsContactModalOpen(false);
-    setEmail('');
-    setFirstName('');
-    setLastName('');
+    try {
+      const newC = await contactsService.createContact({
+        email,
+        firstName,
+        lastName,
+        phone,
+        company,
+        target,
+      });
+      setContacts([newC, ...contacts]);
+      setIsContactModalOpen(false);
+      setEmail('');
+      setFirstName('');
+      setLastName('');
+      setPhone('');
+      setCompany('');
+      setTarget('');
+    } catch (err: any) {
+      alert(`Create contact error: ${err.message}`);
+    }
   };
 
   const handleCreateList = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!listName) return;
-    const newList = await contactsService.createContactList(listName, listDesc);
-    setLists([newList, ...lists]);
-    setIsListModalOpen(false);
-    setListName('');
-    setListDesc('');
+    try {
+      const newList = await contactsService.createContactList(listName, listDesc);
+      setLists([newList, ...lists]);
+      setIsListModalOpen(false);
+      setListName('');
+      setListDesc('');
+    } catch (err: any) {
+      alert(`Create list error: ${err.message}`);
+    }
+  };
+
+  const handleDeleteContact = async (id: string) => {
+    if (confirm('Are you sure you want to delete this contact?')) {
+      await contactsService.deleteContact(id);
+      setContacts((prev) => prev.filter((c) => c.id !== id));
+    }
+  };
+
+  const handleDeleteList = async (id: string) => {
+    if (confirm('Are you sure you want to delete this audience list?')) {
+      await contactsService.deleteContactList(id);
+      setLists((prev) => prev.filter((l) => l.id !== id));
+    }
   };
 
   return (
@@ -69,9 +118,14 @@ export default function ContactsPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Contacts & Audiences</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Contacts & Audiences</h1>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200">
+                Directory
+              </span>
+            </div>
             <p className="text-sm text-slate-500 mt-1">
-              Manage individual recipients and audience list groupings.
+              Manage recipient databases, audience list groupings, and dynamic variable tokens for pCloud distributions.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -91,7 +145,7 @@ export default function ContactsPage() {
             </button>
             <Link
               href="/imports"
-              className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 flex items-center gap-2"
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold hover:opacity-95 transition-all shadow-md shadow-blue-600/20 flex items-center gap-2"
             >
               <FileSpreadsheet className="h-4 w-4" />
               Import Wizard
@@ -102,14 +156,26 @@ export default function ContactsPage() {
         {/* Contact Lists Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {lists.map((lst) => (
-            <div key={lst.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+            <div
+              key={lst.id}
+              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between hover:border-slate-300 transition-all"
+            >
               <div>
                 <h3 className="font-bold text-slate-900 text-base">{lst.name}</h3>
-                <p className="text-xs text-slate-500 mt-0.5">{lst.description || 'No description'}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{lst.description || 'Audience recipient list'}</p>
               </div>
-              <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold">
-                {lst.memberCount} Members
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="px-3 py-1 rounded-full bg-cyan-50 text-cyan-800 border border-cyan-200 text-xs font-bold">
+                  {lst.memberCount || 0} Members
+                </span>
+                <button
+                  onClick={() => handleDeleteList(lst.id)}
+                  className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors"
+                  title="Delete List"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -121,14 +187,14 @@ export default function ContactsPage() {
               <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search by name, email, company..."
+                placeholder="Search by name, email, company, target..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full text-xs bg-white border border-slate-200 rounded-lg pl-9 pr-3 py-2 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               />
             </div>
             <span className="text-xs font-semibold text-slate-500">
-              Showing {filteredContacts.length} of {contacts.length} Contacts
+              {contacts.length} Total Contacts
             </span>
           </div>
 
@@ -137,25 +203,27 @@ export default function ContactsPage() {
               <tr>
                 <th className="py-3.5 px-6">Recipient Name</th>
                 <th className="py-3.5 px-6">Email Address</th>
-                <th className="py-3.5 px-6">Company</th>
+                <th className="py-3.5 px-6">Company / Target</th>
                 <th className="py-3.5 px-6">Phone</th>
-                <th className="py-3.5 px-6">Added Date</th>
+                <th className="py-3.5 px-6">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredContacts.map((c) => (
+              {contacts.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
                   <td className="py-3.5 px-6 font-semibold text-slate-900">
-                    {c.firstName || c.lastName ? `${c.firstName || ''} ${c.lastName || ''}` : 'Unnamed Contact'}
+                    {c.fullName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unnamed Recipient'}
                   </td>
-                  <td className="py-3.5 px-6 font-mono text-slate-600 flex items-center gap-1.5">
-                    <Mail className="h-3.5 w-3.5 text-slate-400" />
-                    {c.email}
+                  <td className="py-3.5 px-6 font-mono text-slate-600">
+                    <span className="flex items-center gap-1.5">
+                      <Mail className="h-3.5 w-3.5 text-slate-400" />
+                      {c.email}
+                    </span>
                   </td>
                   <td className="py-3.5 px-6 text-slate-700">
                     <span className="inline-flex items-center gap-1">
                       <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                      {c.company || '—'}
+                      {c.company || c.target || '—'}
                     </span>
                   </td>
                   <td className="py-3.5 px-6 text-slate-600">
@@ -168,8 +236,14 @@ export default function ContactsPage() {
                       '—'
                     )}
                   </td>
-                  <td className="py-3.5 px-6 text-slate-400">
-                    {new Date(c.createdAt).toLocaleDateString()}
+                  <td className="py-3.5 px-6">
+                    <button
+                      onClick={() => handleDeleteContact(c.id)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                      title="Delete Contact"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -180,7 +254,7 @@ export default function ContactsPage() {
         {/* Modal: Add Contact */}
         {isContactModalOpen && (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95">
               <h3 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3">
                 Add Individual Contact
               </h3>
@@ -219,12 +293,32 @@ export default function ContactsPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Company</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Company / Organization</label>
                   <input
                     type="text"
                     placeholder="Cyberdyne Systems"
                     value={company}
                     onChange={(e) => setCompany(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg p-2.5"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Target / Department</label>
+                  <input
+                    type="text"
+                    placeholder="Strategic Cloud Infrastructure"
+                    value={target}
+                    onChange={(e) => setTarget(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg p-2.5"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Phone Number</label>
+                  <input
+                    type="text"
+                    placeholder="+1 555-0192"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
                     className="w-full border border-slate-300 rounded-lg p-2.5"
                   />
                 </div>
@@ -236,7 +330,10 @@ export default function ContactsPage() {
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold">
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg font-semibold hover:opacity-95 shadow-xs"
+                  >
                     Save Contact
                   </button>
                 </div>
@@ -248,7 +345,7 @@ export default function ContactsPage() {
         {/* Modal: New List */}
         {isListModalOpen && (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95">
               <h3 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3">
                 Create Contact List
               </h3>
@@ -258,7 +355,7 @@ export default function ContactsPage() {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. VIP Prospects"
+                    placeholder="e.g. Q3 Enterprise Leads"
                     value={listName}
                     onChange={(e) => setListName(e.target.value)}
                     className="w-full border border-slate-300 rounded-lg p-2.5"
@@ -281,7 +378,10 @@ export default function ContactsPage() {
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold">
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg font-semibold hover:opacity-95 shadow-xs"
+                  >
                     Create List
                   </button>
                 </div>

@@ -20,14 +20,14 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false,
     })
   );
 
   // Swagger OpenAPI Documentation Configuration
   const config = new DocumentBuilder()
-    .setTitle('Autowork.com SaaS API')
-    .setDescription('Multi-Tenant Email Automation Platform SRS API Specification')
+    .setTitle('Autowork.com pCloud Automation Platform API')
+    .setDescription('Autowork multi-tenant pCloud file sharing, transfer orchestrator, and campaign automation API specification.')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
@@ -38,5 +38,6 @@ async function bootstrap() {
   await app.listen(port);
   console.log(`🚀 Autowork Backend API running on http://localhost:${port}/api`);
   console.log(`📚 Swagger OpenAPI documentation available at http://localhost:${port}/api/docs`);
+  console.log(`🩺 Health check available at http://localhost:${port}/api/health`);
 }
 bootstrap();

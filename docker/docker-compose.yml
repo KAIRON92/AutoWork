@@ -8,7 +8,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:4000/api
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
     depends_on:
       - backend
 
@@ -21,23 +21,38 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4000
-      - DATABASE_URL=postgresql://autowork:autoworkpass@postgres:5432/autowork_db?schema=public
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - JWT_SECRET=super-secret-jwt-token-key-autowork-2026
-      - PCLOUD_CLIENT_ID=placeholder_pcloud_client_id
-      - PCLOUD_ACCESS_TOKEN=placeholder_pcloud_access_token
-      - EMAIL_PROVIDER_ACTIVE=fake
+      - DATABASE_URL=${DATABASE_URL:-postgresql://autowork:autoworkpass@postgres:5432/autowork_db?schema=public}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - JWT_SECRET=${JWT_SECRET:-super-secret-jwt-token-key-autowork-2026}
+      - PCLOUD_DEFAULT_PROVIDER=${PCLOUD_DEFAULT_PROVIDER:-mock_pcloud}
+      - PCLOUD_API_URL=${PCLOUD_API_URL:-https://api.pcloud.com}
     depends_on:
+      - postgres
+      - redis
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL:-postgresql://autowork:autoworkpass@postgres:5432/autowork_db?schema=public}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - PCLOUD_DEFAULT_PROVIDER=${PCLOUD_DEFAULT_PROVIDER:-mock_pcloud}
+      - PCLOUD_API_URL=${PCLOUD_API_URL:-https://api.pcloud.com}
+    depends_on:
+      - backend
       - postgres
       - redis
 
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: autowork
-      POSTGRES_PASSWORD: autoworkpass
-      POSTGRES_DB: autowork_db
+      POSTGRES_USER: ${POSTGRES_USER:-autowork}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-autoworkpass}
+      POSTGRES_DB: ${POSTGRES_DB:-autowork_db}
     ports:
       - "5432:5432"
     volumes:

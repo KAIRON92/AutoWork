@@ -1,39 +1,60 @@
-import { Controller, Get, Post, Param, Body } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { CampaignsService } from './campaigns.service';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  Body,
+  Request,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { CampaignsService, CreateCampaignDto } from './campaigns.service';
 
 @ApiTags('Campaigns')
-@Controller('campaigns')
+@ApiBearerAuth()
+@Controller('api/v1/campaigns')
 export class CampaignsController {
-  constructor(private readonly campaignsService: CampaignsService) {}
+  constructor(private campaignsService: CampaignsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all campaigns' })
-  findAll() {
-    return this.campaignsService.findAll();
+  @ApiOperation({ summary: 'List all pCloud share campaigns for current tenant' })
+  async findAll(@Request() req: any) {
+    const orgId = req.user?.orgId || 'org-101';
+    return await this.campaignsService.findAll(orgId);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get campaign details by ID' })
-  findOne(@Param('id') id: string) {
-    return this.campaignsService.findOne(id);
+  @ApiOperation({ summary: 'Get campaign details, recipient progress, and execution logs' })
+  async findOne(@Param('id') id: string, @Request() req: any) {
+    const orgId = req.user?.orgId || 'org-101';
+    return await this.campaignsService.findOne(id, orgId);
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create new campaign wizard draft' })
-  create(@Body() body: { name: string; templateId: string; accountIds: string[]; contactListIds?: string[]; attachmentIds?: string[] }) {
-    return this.campaignsService.create(body);
+  @ApiOperation({ summary: 'Create a new 8-step configured pCloud share campaign' })
+  async create(@Body() dto: CreateCampaignDto, @Request() req: any) {
+    const orgId = req.user?.orgId || 'org-101';
+    return await this.campaignsService.create(orgId, dto);
   }
 
   @Post(':id/launch')
-  @ApiOperation({ summary: 'Launch campaign background workers' })
-  launch(@Param('id') id: string) {
-    return this.campaignsService.launch(id);
+  @ApiOperation({ summary: 'Launch campaign and begin pCloud share/transfer execution' })
+  async launch(@Param('id') id: string, @Request() req: any) {
+    const orgId = req.user?.orgId || 'org-101';
+    return await this.campaignsService.launch(id, orgId);
   }
 
   @Post(':id/pause')
-  @ApiOperation({ summary: 'Pause running campaign queue' })
-  pause(@Param('id') id: string) {
-    return this.campaignsService.pause(id);
+  @ApiOperation({ summary: 'Pause campaign execution' })
+  async pause(@Param('id') id: string, @Request() req: any) {
+    const orgId = req.user?.orgId || 'org-101';
+    return await this.campaignsService.pause(id, orgId);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a campaign' })
+  async remove(@Param('id') id: string, @Request() req: any) {
+    const orgId = req.user?.orgId || 'org-101';
+    return await this.campaignsService.remove(id, orgId);
   }
 }

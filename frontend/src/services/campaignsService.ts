@@ -1,82 +1,62 @@
-import { apiClient } from './apiClient';
-import { mockCampaigns } from './mockData';
+import axios from 'axios';
 import { Campaign } from '../types';
 
-export interface CreateCampaignPayload {
-  name: string;
-  templateId: string;
-  accountIds: string[];
-  recipientIds?: string[];
-  contactListIds?: string[];
-  attachmentIds?: string[];
-}
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
 export const campaignsService = {
-  async getCampaigns(): Promise<Campaign[]> {
+  async getAll(): Promise<Campaign[]> {
     try {
-      const response = await apiClient.get('/campaigns');
-      return response.data;
-    } catch (err) {
-      return mockCampaigns;
+      const res = await axios.get(`${API_BASE}/v1/campaigns`);
+      return res.data;
+    } catch {
+      return [
+        {
+          id: 'cmp-1',
+          name: 'Q3 Enterprise pCloud Share Campaign',
+          status: 'PROCESSING',
+          pcloudAccountId: 'acc-1',
+          pcloudFileId: 'file-1',
+          templateId: 'tpl-1',
+          totalCount: 50,
+          sharedCount: 38,
+          failedCount: 1,
+          retryingCount: 0,
+          createdAt: new Date().toISOString(),
+        },
+      ];
     }
   },
 
-  async getCampaignById(id: string): Promise<Campaign | undefined> {
-    try {
-      const response = await apiClient.get(`/campaigns/${id}`);
-      return response.data;
-    } catch (err) {
-      return mockCampaigns.find((c) => c.id === id);
-    }
+  async getById(id: string): Promise<Campaign> {
+    const res = await axios.get(`${API_BASE}/v1/campaigns/${id}`);
+    return res.data;
   },
 
-  async createCampaign(payload: CreateCampaignPayload): Promise<Campaign> {
-    try {
-      const response = await apiClient.post('/campaigns', payload);
-      return response.data;
-    } catch (err) {
-      const newCampaign: Campaign = {
-        id: `cmp-${Date.now()}`,
-        name: payload.name,
-        status: 'DRAFT',
-        templateId: payload.templateId,
-        templateName: 'Executive Introduction',
-        accountIds: payload.accountIds,
-        totalCount: (payload.recipientIds?.length || 0) + 5,
-        sentCount: 0,
-        failedCount: 0,
-        createdAt: new Date().toISOString(),
-      };
-      mockCampaigns.unshift(newCampaign);
-      return newCampaign;
-    }
+  async create(data: {
+    name: string;
+    pcloudAccountId: string;
+    pcloudFileId: string;
+    templateId: string;
+    contactListId?: string;
+    recipientContactIds?: string[];
+    config?: any;
+  }): Promise<Campaign> {
+    const res = await axios.post(`${API_BASE}/v1/campaigns`, data);
+    return res.data;
   },
 
-  async launchCampaign(id: string): Promise<Campaign> {
-    try {
-      const response = await apiClient.post(`/campaigns/${id}/launch`);
-      return response.data;
-    } catch (err) {
-      const cmp = mockCampaigns.find((c) => c.id === id);
-      if (cmp) {
-        cmp.status = 'PROCESSING';
-        return { ...cmp };
-      }
-      throw new Error('Campaign not found');
-    }
+  async launch(id: string): Promise<any> {
+    const res = await axios.post(`${API_BASE}/v1/campaigns/${id}/launch`);
+    return res.data;
   },
 
-  async pauseCampaign(id: string): Promise<Campaign> {
-    try {
-      const response = await apiClient.post(`/campaigns/${id}/pause`);
-      return response.data;
-    } catch (err) {
-      const cmp = mockCampaigns.find((c) => c.id === id);
-      if (cmp) {
-        cmp.status = 'PAUSED';
-        return { ...cmp };
-      }
-      throw new Error('Campaign not found');
-    }
+  async pause(id: string): Promise<any> {
+    const res = await axios.post(`${API_BASE}/v1/campaigns/${id}/pause`);
+    return res.data;
+  },
+
+  async delete(id: string): Promise<boolean> {
+    await axios.delete(`${API_BASE}/v1/campaigns/${id}`);
+    return true;
   },
 };

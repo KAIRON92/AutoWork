@@ -7,7 +7,7 @@ export enum CampaignStatus {
   FAILED = 'FAILED',
 }
 
-export enum EmailAccountStatus {
+export enum PCloudAccountStatus {
   ACTIVE = 'ACTIVE',
   PAUSED = 'PAUSED',
   INVALID = 'INVALID',

@@ -1,22 +1,22 @@
 import { apiClient } from './apiClient';
 import { mockExecutionLogs, mockErrorLogs } from './mockData';
-import { ExecutionLog, ErrorLog } from '../types';
+import { PCloudShareExecution, ErrorLog } from '../types';
 
 export const logsService = {
-  async getExecutionLogs(): Promise<ExecutionLog[]> {
+  async getExecutionLogs(): Promise<PCloudShareExecution[]> {
     try {
-      const response = await apiClient.get('/logs/executions');
+      const response = await apiClient.get('/v1/logs/executions');
       return response.data;
-    } catch (err) {
+    } catch {
       return mockExecutionLogs;
     }
   },
 
   async getErrorLogs(): Promise<ErrorLog[]> {
     try {
-      const response = await apiClient.get('/logs/errors');
+      const response = await apiClient.get('/v1/logs/errors');
       return response.data;
-    } catch (err) {
+    } catch {
       return mockErrorLogs;
     }
   },

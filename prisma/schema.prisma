@@ -1,4 +1,4 @@
-// Autowork.com - Multi-Tenant Schema Definition
+// Autowork.com - Multi-Tenant pCloud Automation Schema Definition
 
 datasource db {
   provider = "postgresql"
@@ -7,28 +7,30 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../backend/node_modules/.prisma/client"
 }
 
 model Organization {
-  id                 String               @id @default(uuid())
+  id                 String                  @id @default(uuid())
   name               String
-  slug               String               @unique
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
+  slug               String                  @unique
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
   
   users              User[]
   roles              Role[]
   permissions        Permission[]
-  emailAccounts      EmailAccount[]
+  pcloudAccounts     PCloudAccount[]
+  pcloudFiles        PCloudFile[]
   contacts           Contact[]
   contactLists       ContactList[]
   importJobs         ImportJob[]
   templates          Template[]
-  attachments        Attachment[]
   automations        Automation[]
   automationVersions AutomationVersion[]
   campaigns          Campaign[]
   automationJobs     AutomationJob[]
+  pcloudExecutions   PCloudShareExecution[]
   errorLogs          ErrorLog[]
   auditLogs          AuditLog[]
 }
@@ -67,21 +69,54 @@ model User {
   role           Role?        @relation(fields: [roleId], references: [id], onDelete: SetNull)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
 }
 
-model EmailAccount {
-  id             String       @id @default(uuid())
+model PCloudAccount {
+  id             String                 @id @default(uuid())
   organizationId String
   name           String
-  email          String
-  provider       String       // fake, gmail, microsoft, smtp
-  status         String       // ACTIVE, PAUSED, INVALID, ERROR
-  dailyLimit     Int          @default(500)
-  sentToday      Int          @default(0)
-  credentials    String       // Encrypted JSON
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  accountEmail   String
+  provider       String                 @default("pcloud") // pcloud, mock_pcloud
+  status         String                 @default("ACTIVE") // ACTIVE, PAUSED, INVALID, ERROR
+  dailyLimit     Int                    @default(500)
+  sentToday      Int                    @default(0)
+  credentials    String                 // Encrypted JSON or encrypted token
+  pcloudUserId   String?
+  folderId       String?                @default("0")
+  lastUsedAt     DateTime?
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pcloudFiles    PCloudFile[]
+  campaigns      Campaign[]
+  executions     PCloudShareExecution[]
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model PCloudFile {
+  id              String                 @id @default(uuid())
+  organizationId  String
+  pcloudAccountId String?
+  name            String
+  fileId          String                 // pCloud fileid or reference
+  folderId        String?                @default("0")
+  fileSize        Int                    @default(0)
+  mimeType        String                 @default("application/octet-stream")
+  pcloudPath      String?
+  metadata        String?                // JSON metadata
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pcloudAccount   PCloudAccount?         @relation(fields: [pcloudAccountId], references: [id], onDelete: SetNull)
+  campaigns       Campaign[]
+  executions      PCloudShareExecution[]
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([organizationId])
+  @@index([pcloudAccountId])
 }
 
 model Contact {
@@ -90,13 +125,22 @@ model Contact {
   email          String
   firstName      String?
   lastName       String?
+  fullName       String?
   phone          String?
   company        String?
-  customFields   String?             // JSON string
+  target         String?
+  tags           String?             // JSON array string
+  customFields   String?             // JSON object string
+  source         String?             @default("manual") // manual, import, api
+  status         String              @default("ACTIVE") // ACTIVE, UNSUBSCRIBED, INVALID
   organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberships    ContactListMember[]
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@index([email])
 }
 
 model ContactList {
@@ -106,8 +150,11 @@ model ContactList {
   description    String?
   organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members        ContactListMember[]
+  campaigns      Campaign[]
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
+
+  @@index([organizationId])
 }
 
 model ContactListMember {
@@ -118,6 +165,7 @@ model ContactListMember {
   createdAt     DateTime    @default(now())
 
   @@id([contactId, contactListId])
+  @@index([contactListId])
 }
 
 model ImportJob {
@@ -128,106 +176,148 @@ model ImportJob {
   totalRows      Int          @default(0)
   importedCount  Int          @default(0)
   failedCount    Int          @default(0)
+  duplicateCount Int          @default(0)
   errors         String?      // JSON array of errors
+  detectedMap    String?      // JSON mapping details
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
 }
 
 model Template {
   id             String       @id @default(uuid())
   organizationId String
   name           String
-  subject        String
-  body           String
+  description    String?
+  content        String       // Description template text supporting #NAME#, #RANDOM#, etc.
+  variables      String?      // JSON array of detected variables
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   campaigns      Campaign[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
 }
 
-model Attachment {
-  id             String       @id @default(uuid())
-  organizationId String
-  filename       String
-  fileSize       Int
-  mimeType       String
-  pcloudFileId   String?
-  pcloudPath     String?
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt      DateTime     @default(now())
+model Campaign {
+  id              String                 @id @default(uuid())
+  organizationId  String
+  name            String
+  status          String                 @default("DRAFT") // DRAFT, QUEUED, PROCESSING, PAUSED, COMPLETED, FAILED
+  pcloudAccountId String
+  pcloudFileId    String
+  templateId      String
+  contactListId   String?
+  totalCount      Int                    @default(0)
+  sharedCount     Int                    @default(0)
+  failedCount     Int                    @default(0)
+  retryingCount   Int                    @default(0)
+  config          String?                // JSON settings: rateLimit, concurrency, shareType (sharefolder vs uploadtransfer)
+  pcloudAccount   PCloudAccount          @relation(fields: [pcloudAccountId], references: [id], onDelete: Restrict)
+  pcloudFile      PCloudFile             @relation(fields: [pcloudFileId], references: [id], onDelete: Restrict)
+  template        Template               @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  contactList     ContactList?           @relation(fields: [contactListId], references: [id], onDelete: SetNull)
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recipients      CampaignRecipient[]
+  executions      PCloudShareExecution[]
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model CampaignRecipient {
+  id                      String                 @id @default(uuid())
+  campaignId              String
+  contactId               String
+  recipientEmail          String
+  status                  String                 @default("PENDING") // PENDING, QUEUED, PROCESSING, SHARED, FAILED, RETRYING
+  pcloudShareExecutionId  String?
+  resolvedDescription     String?
+  randomCode              String?
+  errorCode               String?
+  errorMessage            String?
+  campaign                Campaign               @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+
+  @@index([campaignId])
+  @@index([status])
 }
 
 model Automation {
   id             String              @id @default(uuid())
   organizationId String
   name           String
-  status         String              // DRAFT, ACTIVE, PAUSED
+  status         String              @default("DRAFT") // DRAFT, ACTIVE, PAUSED
   organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   versions       AutomationVersion[]
   jobs           AutomationJob[]
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
+
+  @@index([organizationId])
 }
 
 model AutomationVersion {
-  id           String     @id @default(uuid())
-  automationId String
-  version      Int        @default(1)
-  definition   String     // JSON workflow string
-  automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id             String       @id @default(uuid())
+  automationId   String
+  version        Int          @default(1)
+  definition     String       // JSON workflow string
   organizationId String
-  createdAt    DateTime   @default(now())
-}
+  automation     Automation   @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
 
-model Campaign {
-  id             String              @id @default(uuid())
-  organizationId String
-  name           String
-  status         String              // DRAFT, QUEUED, PROCESSING, PAUSED, COMPLETED, FAILED
-  templateId     String
-  accountIds     String              // JSON array string
-  totalCount     Int                 @default(0)
-  sentCount      Int                 @default(0)
-  failedCount    Int                 @default(0)
-  template       Template            @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  recipients     CampaignRecipient[]
-  executions     EmailExecution[]
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-}
-
-model CampaignRecipient {
-  id         String   @id @default(uuid())
-  campaignId String
-  contactId  String
-  status     String   // PENDING, QUEUED, SENT, FAILED
-  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
+  @@index([organizationId])
+  @@index([automationId])
 }
 
 model AutomationJob {
   id             String       @id @default(uuid())
   organizationId String
   automationId   String
-  status         String       // QUEUED, PROCESSING, COMPLETED, FAILED
+  status         String       @default("QUEUED") // QUEUED, PROCESSING, COMPLETED, FAILED
   automation     Automation   @relation(fields: [automationId], references: [id], onDelete: Cascade)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
 }
 
-model EmailExecution {
-  id             String   @id @default(uuid())
-  campaignId     String
-  emailAccountId String
-  recipientEmail String
-  status         String   // SUCCESS, FAILED, RETRYING
-  responseMessage String?
-  sentAt         DateTime @default(now())
-  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+model PCloudShareExecution {
+  id                  String         @id @default(uuid())
+  organizationId      String
+  campaignId          String
+  jobId               String?
+  recipientId         String?
+  pcloudAccountId     String
+  pcloudFileId        String
+  recipientEmail      String
+  descriptionSnapshot String
+  operationType       String         @default("sharefolder") // sharefolder, uploadtransfer, publink
+  status              String         // SUCCESS, FAILED, RETRYING
+  pcloudReferenceId   String?        // shareid, progresshash, transferid
+  errorCode           String?
+  errorMessage        String?
+  retryCount          Int            @default(0)
+  startedAt           DateTime       @default(now())
+  completedAt         DateTime?
+  organization        Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaign            Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  pcloudAccount       PCloudAccount  @relation(fields: [pcloudAccountId], references: [id], onDelete: Restrict)
+  pcloudFile          PCloudFile     @relation(fields: [pcloudFileId], references: [id], onDelete: Restrict)
+  createdAt           DateTime       @default(now())
+
+  @@index([organizationId])
+  @@index([campaignId])
+  @@index([pcloudAccountId])
+  @@index([recipientEmail])
+  @@index([status])
 }
 
 model ErrorLog {
@@ -239,6 +329,9 @@ model ErrorLog {
   context        String?       // JSON string
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt      DateTime      @default(now())
+
+  @@index([organizationId])
+  @@index([code])
 }
 
 model AuditLog {
@@ -250,6 +343,8 @@ model AuditLog {
   details        String?      // JSON string
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
 }
 
 model SystemSetting {

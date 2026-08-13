@@ -1,74 +1,112 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { TemplateVariableResolver, RecipientContext } from './template-variable.resolver';
+
+export interface CreateTemplateDto {
+  name: string;
+  description?: string;
+  content: string;
+}
+
+export interface PreviewTemplateDto {
+  content: string;
+  sampleRecipient?: RecipientContext;
+}
 
 @Injectable()
 export class TemplatesService {
-  private templates = [
-    {
-      id: 'tpl-1',
-      name: 'Executive Introduction',
-      subject: 'Quick question regarding #COMPANY# (#RANDOM#)',
-      body: 'Hi #FIRSTNAME#,\n\nI noticed #COMPANY# has been expanding rapidly. We help companies like yours automate outbound workflows with total organization isolation.\n\nWould you be open to a 10-minute introduction this week?\n\nBest regards,\nAlex Morgan\nAutowork.com (Ref ID: #RANDOM#)',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  ];
+  constructor(private prisma: PrismaService) {}
 
-  async findAll() {
-    return this.templates;
+  async findAll(organizationId: string) {
+    return await this.prisma.template.findMany({
+      where: { organizationId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
-  async create(data: { name: string; subject: string; body: string }) {
-    const newTpl = {
-      id: `tpl-${Date.now()}`,
-      name: data.name,
-      subject: data.subject,
-      body: data.body,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+  async findOne(id: string, organizationId: string) {
+    const template = await this.prisma.template.findFirst({
+      where: { id, organizationId },
+    });
+    if (!template) throw new NotFoundException(`Template ${id} not found`);
+    return template;
+  }
+
+  async create(organizationId: string, dto: CreateTemplateDto) {
+    const variables = TemplateVariableResolver.detectVariables(dto.content);
+
+    return await this.prisma.template.create({
+      data: {
+        organizationId,
+        name: dto.name,
+        description: dto.description || null,
+        content: dto.content,
+        variables: JSON.stringify(variables),
+      },
+    });
+  }
+
+  async update(id: string, organizationId: string, dto: Partial<CreateTemplateDto>) {
+    const template = await this.prisma.template.findFirst({
+      where: { id, organizationId },
+    });
+    if (!template) throw new NotFoundException(`Template ${id} not found`);
+
+    const variables = dto.content ? TemplateVariableResolver.detectVariables(dto.content) : undefined;
+
+    return await this.prisma.template.update({
+      where: { id },
+      data: {
+        name: dto.name,
+        description: dto.description,
+        content: dto.content,
+        variables: variables ? JSON.stringify(variables) : undefined,
+      },
+    });
+  }
+
+  async duplicate(id: string, organizationId: string) {
+    const original = await this.findOne(id, organizationId);
+    return await this.create(organizationId, {
+      name: `${original.name} (Copy)`,
+      description: original.description || undefined,
+      content: original.content,
+    });
+  }
+
+  async remove(id: string, organizationId: string) {
+    const template = await this.prisma.template.findFirst({
+      where: { id, organizationId },
+    });
+    if (!template) throw new NotFoundException(`Template ${id} not found`);
+
+    await this.prisma.template.delete({
+      where: { id },
+    });
+
+    return { success: true, message: `Template ${id} removed` };
+  }
+
+  preview(dto: PreviewTemplateDto) {
+    const sample: RecipientContext = dto.sampleRecipient || {
+      email: 'alex.morgan@acmegrowth.com',
+      firstName: 'Alex',
+      lastName: 'Morgan',
+      fullName: 'Alex Morgan',
+      company: 'Acme Growth Labs',
+      phone: '+1 (555) 234-5678',
+      target: 'Enterprise Cloud Division',
     };
-    this.templates.unshift(newTpl);
-    return newTpl;
-  }
 
-  async update(id: string, data: Partial<{ name: string; subject: string; body: string }>) {
-    const tpl = this.templates.find((t) => t.id === id);
-    if (tpl) {
-      Object.assign(tpl, data, { updatedAt: new Date().toISOString() });
-      return tpl;
-    }
-    throw new Error('Template not found');
-  }
+    const variables = TemplateVariableResolver.detectVariables(dto.content);
+    const { resolvedText, randomCode } = TemplateVariableResolver.resolve(dto.content, sample);
 
-  async remove(id: string) {
-    this.templates = this.templates.filter((t) => t.id !== id);
-    return true;
-  }
-
-  /**
-   * Server-Side Variable Resolution Engine
-   */
-  resolveTemplate(subject: string, body: string, recipient: { email: string; firstName?: string; lastName?: string; company?: string; phone?: string }) {
-    const randomVal = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const fullName = `${recipient.firstName || ''} ${recipient.lastName || ''}`.trim() || recipient.email;
-
-    const vars: Record<string, string> = {
-      '#NAME#': fullName,
-      '#FIRSTNAME#': recipient.firstName || 'Friend',
-      '#LASTNAME#': recipient.lastName || '',
-      '#EMAIL#': recipient.email,
-      '#PHONE#': recipient.phone || '',
-      '#COMPANY#': recipient.company || 'your organization',
-      '#RANDOM#': randomVal,
+    return {
+      originalContent: dto.content,
+      resolvedPreview: resolvedText,
+      randomCodeGenerated: randomCode,
+      detectedVariables: variables,
+      sampleUsed: sample,
     };
-
-    let resolvedSubject = subject;
-    let resolvedBody = body;
-
-    for (const [tag, val] of Object.entries(vars)) {
-      resolvedSubject = resolvedSubject.replace(new RegExp(tag, 'g'), val);
-      resolvedBody = resolvedBody.replace(new RegExp(tag, 'g'), val);
-    }
-
-    return { subject: resolvedSubject, body: resolvedBody, randomVal };
   }
 }

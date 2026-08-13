@@ -8,41 +8,51 @@ export interface CreateContactPayload {
   lastName?: string;
   phone?: string;
   company?: string;
+  target?: string;
 }
 
 export interface ImportContactsPayload {
   filename: string;
   rawText?: string;
-  mappings: Record<string, string>; // e.g. { "0": "email", "1": "firstName" }
+  mappings: Record<string, string>;
   contactListId?: string;
 }
 
 export const contactsService = {
-  async getContacts(): Promise<Contact[]> {
+  async getContacts(search?: string): Promise<Contact[]> {
     try {
-      const response = await apiClient.get('/contacts');
+      const response = await apiClient.get('/contacts', { params: { search } });
       return response.data;
-    } catch (err) {
+    } catch {
       return mockContacts;
     }
+  },
+
+  async getAllContacts(search?: string): Promise<Contact[]> {
+    return this.getContacts(search);
   },
 
   async getContactLists(): Promise<ContactList[]> {
     try {
       const response = await apiClient.get('/contact-lists');
       return response.data;
-    } catch (err) {
+    } catch {
       return mockContactLists;
     }
+  },
+
+  async getAllLists(): Promise<ContactList[]> {
+    return this.getContactLists();
   },
 
   async createContact(payload: CreateContactPayload): Promise<Contact> {
     try {
       const response = await apiClient.post('/contacts', payload);
       return response.data;
-    } catch (err) {
+    } catch {
       const newContact: Contact = {
         id: `cnt-${Date.now()}`,
+        status: 'ACTIVE',
         ...payload,
         createdAt: new Date().toISOString(),
       };
@@ -51,11 +61,22 @@ export const contactsService = {
     }
   },
 
+  async deleteContact(id: string): Promise<{ success: boolean }> {
+    try {
+      const response = await apiClient.delete(`/contacts/${id}`);
+      return response.data;
+    } catch {
+      const idx = mockContacts.findIndex((c) => c.id === id);
+      if (idx !== -1) mockContacts.splice(idx, 1);
+      return { success: true };
+    }
+  },
+
   async createContactList(name: string, description?: string): Promise<ContactList> {
     try {
       const response = await apiClient.post('/contact-lists', { name, description });
       return response.data;
-    } catch (err) {
+    } catch {
       const newList: ContactList = {
         id: `lst-${Date.now()}`,
         name,
@@ -68,12 +89,22 @@ export const contactsService = {
     }
   },
 
+  async deleteContactList(id: string): Promise<{ success: boolean }> {
+    try {
+      const response = await apiClient.delete(`/contact-lists/${id}`);
+      return response.data;
+    } catch {
+      const idx = mockContactLists.findIndex((l) => l.id === id);
+      if (idx !== -1) mockContactLists.splice(idx, 1);
+      return { success: true };
+    }
+  },
+
   async importContacts(payload: ImportContactsPayload): Promise<ImportJob> {
     try {
       const response = await apiClient.post('/imports', payload);
       return response.data;
-    } catch (err) {
-      // Mock batch processing logic
+    } catch {
       const importedCount = payload.rawText ? payload.rawText.split('\n').length : 5;
       const job: ImportJob = {
         id: `imp-${Date.now()}`,

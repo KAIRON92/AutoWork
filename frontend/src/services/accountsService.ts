@@ -1,67 +1,66 @@
-import { apiClient } from './apiClient';
-import { mockAccounts } from './mockData';
-import { EmailAccount } from '../types';
+import axios from 'axios';
+import { PCloudAccount } from '../types';
 
-export interface CreateAccountPayload {
-  name: string;
-  email: string;
-  provider: 'fake' | 'gmail' | 'microsoft' | 'smtp';
-  dailyLimit?: number;
-  credentials?: Record<string, any>;
-}
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
 export const accountsService = {
-  async getAccounts(): Promise<EmailAccount[]> {
+  async getAll(): Promise<PCloudAccount[]> {
     try {
-      const response = await apiClient.get('/accounts');
-      return response.data;
-    } catch (err) {
-      return mockAccounts;
+      const res = await axios.get(`${API_BASE}/v1/pcloud/accounts`);
+      return res.data;
+    } catch {
+      return [
+        {
+          id: 'acc-1',
+          organizationId: 'org-101',
+          name: 'Primary pCloud Account',
+          accountEmail: 'primary@autowork.com',
+          provider: 'mock_pcloud',
+          status: 'ACTIVE',
+          dailyLimit: 500,
+          sentToday: 142,
+          hasCredentials: true,
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: 'acc-2',
+          organizationId: 'org-101',
+          name: 'Enterprise pCloud Vault',
+          accountEmail: 'enterprise@autowork.com',
+          provider: 'pcloud',
+          status: 'ACTIVE',
+          dailyLimit: 1000,
+          sentToday: 48,
+          hasCredentials: true,
+          createdAt: new Date().toISOString(),
+        },
+      ];
     }
   },
 
-  async createAccount(payload: CreateAccountPayload): Promise<EmailAccount> {
-    try {
-      const response = await apiClient.post('/accounts', payload);
-      return response.data;
-    } catch (err) {
-      const newAcc: EmailAccount = {
-        id: `acc-${Date.now()}`,
-        name: payload.name,
-        email: payload.email,
-        provider: payload.provider,
-        status: 'ACTIVE',
-        dailyLimit: payload.dailyLimit || 500,
-        sentToday: 0,
-        createdAt: new Date().toISOString(),
-      };
-      mockAccounts.unshift(newAcc);
-      return newAcc;
-    }
+  async create(data: {
+    name: string;
+    accountEmail: string;
+    provider?: 'pcloud' | 'mock_pcloud';
+    accessToken?: string;
+    dailyLimit?: number;
+  }): Promise<PCloudAccount> {
+    const res = await axios.post(`${API_BASE}/v1/pcloud/accounts`, data);
+    return res.data;
   },
 
-  async toggleStatus(id: string): Promise<EmailAccount> {
-    try {
-      const response = await apiClient.patch(`/accounts/${id}/status`);
-      return response.data;
-    } catch (err) {
-      const acc = mockAccounts.find((a) => a.id === id);
-      if (acc) {
-        acc.status = acc.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
-        return { ...acc };
-      }
-      throw new Error('Account not found');
-    }
+  async testConnection(id: string): Promise<{ connected: boolean; message: string }> {
+    const res = await axios.post(`${API_BASE}/v1/pcloud/accounts/${id}/test`);
+    return res.data;
   },
 
-  async deleteAccount(id: string): Promise<boolean> {
-    try {
-      await apiClient.delete(`/accounts/${id}`);
-      return true;
-    } catch (err) {
-      const index = mockAccounts.findIndex((a) => a.id === id);
-      if (index !== -1) mockAccounts.splice(index, 1);
-      return true;
-    }
+  async toggleStatus(id: string): Promise<PCloudAccount> {
+    const res = await axios.patch(`${API_BASE}/v1/pcloud/accounts/${id}/status`);
+    return res.data;
+  },
+
+  async delete(id: string): Promise<boolean> {
+    await axios.delete(`${API_BASE}/v1/pcloud/accounts/${id}`);
+    return true;
   },
 };

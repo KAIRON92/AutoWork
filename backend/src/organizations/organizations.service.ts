@@ -12,7 +12,8 @@ export class OrganizationsService {
         _count: {
           select: {
             users: true,
-            emailAccounts: true,
+            pcloudAccounts: true,
+            pcloudFiles: true,
             contacts: true,
             campaigns: true,
             templates: true,

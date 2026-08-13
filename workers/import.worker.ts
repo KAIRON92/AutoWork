@@ -1,20 +1,14 @@
-export interface ImportWorkerJobData {
-  importJobId: string;
-  filename: string;
-  rawText: string;
-  mappings: Record<string, string>;
-  organizationId: string;
-}
+import { Worker, Job } from 'bullmq';
 
-export class ImportWorker {
-  async processJob(job: ImportWorkerJobData) {
-    console.log(`[ImportWorker] Processing import job ${job.importJobId} for file ${job.filename}`);
-    const rows = job.rawText.split('\n');
-    console.log(`[ImportWorker] Successfully imported ${rows.length} rows into organization ${job.organizationId}`);
-    return {
-      importedCount: rows.length,
-      failedCount: 0,
-      status: 'COMPLETED',
-    };
-  }
+export function createImportWorker(redisConnection: { host: string; port: number }) {
+  const worker = new Worker(
+    'import-queue',
+    async (job: Job) => {
+      console.log(`[Import Worker] Processing import job ${job.data.importJobId}`);
+      return { success: true, processedAt: new Date().toISOString() };
+    },
+    { connection: redisConnection }
+  );
+
+  return worker;
 }

@@ -1,33 +1,67 @@
-import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { TemplatesService } from './templates.service';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Param,
+  Body,
+  Request,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { TemplatesService, CreateTemplateDto, PreviewTemplateDto } from './templates.service';
 
 @ApiTags('Templates')
-@Controller('templates')
+@ApiBearerAuth()
+@Controller('api/v1/templates')
 export class TemplatesController {
-  constructor(private readonly templatesService: TemplatesService) {}
+  constructor(private templatesService: TemplatesService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all templates' })
-  findAll() {
-    return this.templatesService.findAll();
+  @ApiOperation({ summary: 'List all description templates for current tenant' })
+  async findAll(@Request() req: any) {
+    const orgId = req.user?.orgId || 'org-101';
+    return await this.templatesService.findAll(orgId);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get single description template' })
+  async findOne(@Param('id') id: string, @Request() req: any) {
+    const orgId = req.user?.orgId || 'org-101';
+    return await this.templatesService.findOne(id, orgId);
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create new template' })
-  create(@Body() body: { name: string; subject: string; body: string }) {
-    return this.templatesService.create(body);
+  @ApiOperation({ summary: 'Create new description template' })
+  async create(@Body() dto: CreateTemplateDto, @Request() req: any) {
+    const orgId = req.user?.orgId || 'org-101';
+    return await this.templatesService.create(orgId, dto);
+  }
+
+  @Post('preview')
+  @ApiOperation({ summary: 'Live preview of a template with sample recipient and #RANDOM# code generation' })
+  preview(@Body() dto: PreviewTemplateDto) {
+    return this.templatesService.preview(dto);
+  }
+
+  @Post(':id/duplicate')
+  @ApiOperation({ summary: 'Duplicate an existing template' })
+  async duplicate(@Param('id') id: string, @Request() req: any) {
+    const orgId = req.user?.orgId || 'org-101';
+    return await this.templatesService.duplicate(id, orgId);
   }
 
   @Put(':id')
-  @ApiOperation({ summary: 'Update existing template' })
-  update(@Param('id') id: string, @Body() body: Partial<{ name: string; subject: string; body: string }>) {
-    return this.templatesService.update(id, body);
+  @ApiOperation({ summary: 'Update an existing template' })
+  async update(@Param('id') id: string, @Body() dto: Partial<CreateTemplateDto>, @Request() req: any) {
+    const orgId = req.user?.orgId || 'org-101';
+    return await this.templatesService.update(id, orgId, dto);
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete template' })
-  remove(@Param('id') id: string) {
-    return this.templatesService.remove(id);
+  @ApiOperation({ summary: 'Delete a template' })
+  async remove(@Param('id') id: string, @Request() req: any) {
+    const orgId = req.user?.orgId || 'org-101';
+    return await this.templatesService.remove(id, orgId);
   }
 }
