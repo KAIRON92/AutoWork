@@ -11,7 +11,6 @@ import { ImportsModule } from './imports/imports.module';
 import { TemplatesModule } from './templates/templates.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { AutomationsModule } from './automations/automations.module';
-import { LogsModule } from './logs/logs.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { HealthModule } from './health/health.module';
 import { AdminModule } from './admin/admin.module';
@@ -30,7 +29,6 @@ import { AdminModule } from './admin/admin.module';
     TemplatesModule,
     CampaignsModule,
     AutomationsModule,
-    LogsModule,
     DashboardModule,
     HealthModule,
     AdminModule,
