@@ -73,7 +73,7 @@ export class PCloudAccountsService {
   }
 
   async create(organizationId: string, dto: CreatePCloudAccountDto) {
-    const provider = dto.provider || 'mock_pcloud';
+    const provider = dto.provider || 'pcloud';
     const rawCredential = dto.accessToken?.trim();
 
     if (provider === 'mock_pcloud') {
@@ -100,9 +100,11 @@ export class PCloudAccountsService {
       verifyResult = await adapter.verifyConnection(login.token, apiHost);
     }
 
+    if (!verifyResult.connected) throw new BadRequestException(verifyResult.message || 'Unable to verify pCloud credentials');
+
     const credentials = encryptPCloudCredential(credentialForStorage);
     const account = await this.prisma.pCloudAccount.create({
-      data: { organizationId, name: dto.name, accountEmail: dto.accountEmail, provider, status: verifyResult.connected ? 'ACTIVE' : 'ERROR', dailyLimit: dto.dailyLimit || 500, sentToday: 0, folderId: dto.folderId || '0', credentials, pcloudUserId: verifyResult.userInfo?.userId || undefined, apiHost },
+      data: { organizationId, name: dto.name, accountEmail: dto.accountEmail, provider, status: 'ACTIVE', dailyLimit: dto.dailyLimit || 500, sentToday: 0, folderId: dto.folderId || '0', credentials, pcloudUserId: verifyResult.userInfo?.userId || undefined, apiHost },
     });
     return this.sanitizeAccount(account);
   }
