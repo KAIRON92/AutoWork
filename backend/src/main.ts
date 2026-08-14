@@ -12,8 +12,6 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.setGlobalPrefix('api');
-
   app.useGlobalFilters(new HttpExceptionFilter());
 
   app.useGlobalPipes(
@@ -24,7 +22,6 @@ async function bootstrap() {
     })
   );
 
-  // Swagger OpenAPI Documentation Configuration
   const config = new DocumentBuilder()
     .setTitle('Autowork.com pCloud Automation Platform API')
     .setDescription('Autowork multi-tenant pCloud file sharing, transfer orchestrator, and campaign automation API specification.')
@@ -36,7 +33,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || 4000;
   await app.listen(port);
-  console.log(`🚀 Autowork Backend API running on http://localhost:${port}/api`);
+  console.log(`🚀 Autowork Backend API running on http://localhost:${port}`);
   console.log(`📚 Swagger OpenAPI documentation available at http://localhost:${port}/api/docs`);
   console.log(`🩺 Health check available at http://localhost:${port}/api/health`);
 }
