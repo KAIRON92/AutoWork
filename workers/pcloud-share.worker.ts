@@ -33,6 +33,7 @@ export function createPCloudShareWorker(redisConnection: { host: string; port: n
 
       const account = campaign.pcloudAccount;
       const credential = account.provider === 'mock_pcloud' ? account.credentials : decryptPCloudCredential(account.credentials);
+      const apiHost = account.apiHost || undefined;
       const adapter = PCloudAdapterFactory.getAdapter(account.provider);
       const contact = await prisma.contact.findUnique({ where: { id: recipient.contactId } });
       const { resolvedText, randomCode } = TemplateVariableResolver.resolve(data.templateContent, {
@@ -46,8 +47,8 @@ export function createPCloudShareWorker(redisConnection: { host: string; port: n
       });
 
       const result = data.operationType === 'sharefolder'
-        ? await adapter.shareFolder({ folderId: campaign.pcloudFile.folderId || '0', fileId: campaign.pcloudFile.fileId, recipientEmail: recipient.recipientEmail, message: resolvedText, pcloudAccountId: account.id, organizationId: campaign.organizationId, campaignId: campaign.id, jobId: job.id }, credential)
-        : await adapter.createTransfer({ fileId: campaign.pcloudFile.fileId, filename: campaign.pcloudFile.name, mimeType: campaign.pcloudFile.mimeType, senderEmail: account.accountEmail, recipientEmails: [recipient.recipientEmail], message: resolvedText, pcloudAccountId: account.id, organizationId: campaign.organizationId, campaignId: campaign.id, jobId: job.id }, credential);
+        ? await adapter.shareFolder({ folderId: campaign.pcloudFile.folderId || '0', fileId: campaign.pcloudFile.fileId, recipientEmail: recipient.recipientEmail, message: resolvedText, pcloudAccountId: account.id, organizationId: campaign.organizationId, campaignId: campaign.id, jobId: job.id }, credential, apiHost)
+        : await adapter.createTransfer({ fileId: campaign.pcloudFile.fileId, filename: campaign.pcloudFile.name, mimeType: campaign.pcloudFile.mimeType, senderEmail: account.accountEmail, recipientEmails: [recipient.recipientEmail], message: resolvedText, pcloudAccountId: account.id, organizationId: campaign.organizationId, campaignId: campaign.id, jobId: job.id }, credential, apiHost);
 
       if (!result.success && result.error?.isTransient && job.attemptsMade < (job.opts.attempts || 3)) {
         await prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'RETRYING', errorCode: result.error.code, errorMessage: result.error.message } });
