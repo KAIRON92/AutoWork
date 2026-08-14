@@ -13,6 +13,8 @@ export const apiClient = axios.create({
 
 apiClient.interceptors.request.use(
   (config) => {
+    // Migrate away from the old browser-readable JWT storage immediately.
+    if (typeof window !== 'undefined') localStorage.removeItem('autowork_jwt_token');
     // Authentication is cookie-based. Never put pCloud credentials, passwords,
     // or JWTs into request URLs or application logs.
     return config;
