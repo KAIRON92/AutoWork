@@ -10,10 +10,8 @@ export class PCloudAdapterFactory {
     return this.mockInstance;
   }
 
-  static getAdapter(provider: string = 'mock_pcloud'): IPCloudAdapter {
-    if (provider === 'pcloud') {
-      return this.realInstance;
-    }
-    return this.mockInstance;
+  static getAdapter(provider: string = 'pcloud'): IPCloudAdapter {
+    if (provider === 'mock_pcloud') return this.mockInstance;
+    return this.realInstance;
   }
 }
