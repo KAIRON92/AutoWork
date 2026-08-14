@@ -4,19 +4,7 @@ import { useState, useEffect } from 'react';
 import { Shell } from '@/components/layout/shell';
 import { accountsService } from '@/services/accountsService';
 import { PCloudAccount } from '@/types';
-import {
-  Cloud,
-  Plus,
-  CheckCircle2,
-  PauseCircle,
-  Trash2,
-  ShieldCheck,
-  Check,
-  RefreshCw,
-  Sparkles,
-  Zap,
-  Activity,
-} from 'lucide-react';
+import { Cloud, Plus, CheckCircle2, PauseCircle, Trash2, ShieldCheck, Check, RefreshCw } from 'lucide-react';
 
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<PCloudAccount[]>([]);
@@ -24,19 +12,16 @@ export default function AccountsPage() {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ id: string; success: boolean; message: string } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // Form State
   const [name, setName] = useState('');
   const [accountEmail, setAccountEmail] = useState('');
-  const [provider, setProvider] = useState<'pcloud' | 'mock_pcloud'>('mock_pcloud');
+  const [provider, setProvider] = useState<'pcloud' | 'mock_pcloud'>('pcloud');
   const [accessToken, setAccessToken] = useState('');
   const [dailyLimit, setDailyLimit] = useState(500);
 
   const fetchAccounts = async () => {
     try {
       setLoading(true);
-      const data = await accountsService.getAll();
-      setAccounts(data);
+      setAccounts(await accountsService.getAll());
     } catch (err) {
       console.error('Failed to load accounts:', err);
     } finally {
@@ -44,17 +29,13 @@ export default function AccountsPage() {
     }
   };
 
-  useEffect(() => {
-    fetchAccounts();
-  }, []);
+  useEffect(() => { fetchAccounts(); }, []);
 
   const handleToggle = async (id: string) => {
     try {
       const updated = await accountsService.toggleStatus(id);
       setAccounts((prev) => prev.map((a) => (a.id === id ? updated : a)));
-    } catch (err) {
-      console.error('Toggle status failed:', err);
-    }
+    } catch (err) { console.error('Toggle status failed:', err); }
   };
 
   const handleTestConnection = async (id: string) => {
@@ -65,9 +46,7 @@ export default function AccountsPage() {
       await fetchAccounts();
     } catch (err: any) {
       setTestResult({ id, success: false, message: err.message || 'Connection test failed' });
-    } finally {
-      setTestingId(null);
-    }
+    } finally { setTestingId(null); }
   };
 
   const handleDelete = async (id: string) => {
@@ -79,270 +58,67 @@ export default function AccountsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !accountEmail) return;
-
+    if (!name || !accountEmail || !accessToken) return;
     try {
-      const newAcc = await accountsService.create({
-        name,
-        accountEmail,
-        provider,
-        accessToken: accessToken || undefined,
-        dailyLimit: Number(dailyLimit),
-      });
-
-      setAccounts([newAcc, ...accounts]);
+      const newAcc = await accountsService.create({ name, accountEmail, provider, accessToken, dailyLimit: Number(dailyLimit) });
+      setAccounts((prev) => [newAcc, ...prev]);
       setIsModalOpen(false);
-      setName('');
-      setAccountEmail('');
-      setAccessToken('');
-    } catch (err: any) {
-      alert(`Error creating pCloud account: ${err.message}`);
-    }
+      setName(''); setAccountEmail(''); setAccessToken('');
+    } catch (err: any) { alert(`Error connecting pCloud account: ${err.message}`); }
   };
 
   return (
     <Shell>
       <div className="max-w-7xl mx-auto space-y-8">
-        {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-slate-900 tracking-tight">pCloud Accounts</h1>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                <Cloud className="h-3 w-3" /> Multi-Account Architecture
-              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200"><Cloud className="h-3 w-3" /> Multi-Account Architecture</span>
             </div>
-            <p className="text-sm text-slate-500 mt-1">
-              Connect and manage multiple authenticated pCloud accounts for load-balanced sharing and file transfers.
-            </p>
+            <p className="text-sm text-slate-500 mt-1">Connect and manage authenticated pCloud accounts for file transfers and sharing.</p>
           </div>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold hover:opacity-95 transition-all shadow-md shadow-blue-600/20 flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Connect pCloud Account
-          </button>
+          <button onClick={() => setIsModalOpen(true)} className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold shadow-md flex items-center gap-2"><Plus className="h-4 w-4" />Connect pCloud Account</button>
         </div>
 
-        {/* Notice Banner regarding pCloud Adapter */}
-        <div className="p-4 rounded-xl bg-gradient-to-r from-cyan-50 to-blue-50 border border-cyan-200 text-cyan-950 flex items-start gap-3">
+        <div className="p-4 rounded-xl bg-cyan-50 border border-cyan-200 text-cyan-950 flex items-start gap-3">
           <ShieldCheck className="h-5 w-5 text-cyan-600 shrink-0 mt-0.5" />
           <div className="text-xs space-y-1">
-            <p className="font-semibold text-sm">pCloud Native Engine Operating Mode</p>
-            <p>
-              Autowork executes file operations directly through official pCloud API endpoints (<code>sharefolder</code> and <code>uploadtransfer</code>). You can connect both real production pCloud accounts with OAuth/Access Tokens and simulation test accounts for automated dry runs.
-            </p>
+            <p className="font-semibold text-sm">Secure pCloud connection</p>
+            <p>Use the official pCloud API with an access token or the account password. Passwords are used only for the login exchange and are not stored; the resulting auth token is encrypted at rest.</p>
           </div>
         </div>
 
-        {/* Test Result Toast */}
-        {testResult && (
-          <div
-            className={`p-4 rounded-xl border flex items-center justify-between gap-3 text-xs ${
-              testResult.success
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                : 'bg-rose-50 border-rose-200 text-rose-800'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              {testResult.success ? <CheckCircle2 className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
-              <span>{testResult.message}</span>
-            </div>
-            <button onClick={() => setTestResult(null)} className="text-xs font-bold hover:underline">
-              Dismiss
-            </button>
-          </div>
-        )}
+        {testResult && <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 text-xs ${testResult.success ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'}`}><div className="flex items-center gap-2">{testResult.success ? <CheckCircle2 className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}<span>{testResult.message}</span></div><button onClick={() => setTestResult(null)} className="text-xs font-bold hover:underline">Dismiss</button></div>}
 
-        {/* Account Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {accounts.map((acc) => (
-            <div
-              key={acc.id}
-              className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 transition-all"
-            >
+            <div key={acc.id} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between space-y-4">
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Cloud className="h-5 w-5 text-cyan-600" />
-                    <span className="font-bold text-slate-900 text-base">{acc.name}</span>
-                  </div>
-                  <span
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                      acc.status === 'ACTIVE'
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        : 'bg-amber-50 text-amber-700 border border-amber-200'
-                    }`}
-                  >
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        acc.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-amber-500'
-                      }`}
-                    ></span>
-                    {acc.status}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2 text-xs font-mono text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                  <span className="truncate">{acc.accountEmail}</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs pt-2">
-                  <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Engine</span>
-                    <span className="font-bold text-slate-800 uppercase">{acc.provider}</span>
-                  </div>
-                  <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Daily Shares</span>
-                    <span className="font-bold text-slate-800">{acc.sentToday} / {acc.dailyLimit}</span>
-                  </div>
-                </div>
+                <div className="flex items-center justify-between"><div className="flex items-center gap-2"><Cloud className="h-5 w-5 text-cyan-600" /><span className="font-bold text-slate-900 text-base">{acc.name}</span></div><span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${acc.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}><span className={`h-2 w-2 rounded-full ${acc.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>{acc.status}</span></div>
+                <div className="text-xs font-mono text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 truncate">{acc.accountEmail}</div>
+                <div className="grid grid-cols-2 gap-2 text-xs pt-2"><div className="bg-slate-50 p-2 rounded-lg border border-slate-100"><span className="text-slate-400 block text-[10px] uppercase font-semibold">Engine</span><span className="font-bold text-slate-800 uppercase">{acc.provider}</span></div><div className="bg-slate-50 p-2 rounded-lg border border-slate-100"><span className="text-slate-400 block text-[10px] uppercase font-semibold">Daily Transfers</span><span className="font-bold text-slate-800">{acc.sentToday} / {acc.dailyLimit}</span></div></div>
               </div>
-
-              {/* Action Buttons */}
               <div className="flex items-center gap-2 pt-4 border-t border-slate-100">
-                <button
-                  onClick={() => handleTestConnection(acc.id)}
-                  disabled={testingId === acc.id}
-                  className="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${testingId === acc.id ? 'animate-spin' : ''}`} />
-                  {testingId === acc.id ? 'Testing...' : 'Test Auth'}
-                </button>
-
-                <button
-                  onClick={() => handleToggle(acc.id)}
-                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
-                    acc.status === 'ACTIVE'
-                      ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      : 'bg-emerald-600 text-white hover:bg-emerald-700'
-                  }`}
-                >
-                  {acc.status === 'ACTIVE' ? (
-                    <>
-                      <PauseCircle className="h-3.5 w-3.5" />
-                      Pause
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Activate
-                    </>
-                  )}
-                </button>
-
-                <button
-                  onClick={() => handleDelete(acc.id)}
-                  className="p-2 rounded-lg border border-slate-200 text-rose-600 hover:bg-rose-50 hover:border-rose-200 transition-colors"
-                  title="Disconnect Account"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <button onClick={() => handleTestConnection(acc.id)} disabled={testingId === acc.id} className="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5"><RefreshCw className={`h-3.5 w-3.5 ${testingId === acc.id ? 'animate-spin' : ''}`} />{testingId === acc.id ? 'Testing...' : 'Test Auth'}</button>
+                <button onClick={() => handleToggle(acc.id)} className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 ${acc.status === 'ACTIVE' ? 'bg-slate-100 text-slate-700' : 'bg-emerald-600 text-white'}`}>{acc.status === 'ACTIVE' ? <><PauseCircle className="h-3.5 w-3.5" />Pause</> : <><CheckCircle2 className="h-3.5 w-3.5" />Activate</>}</button>
+                <button onClick={() => handleDelete(acc.id)} className="p-2 rounded-lg border border-slate-200 text-rose-600" title="Disconnect Account"><Trash2 className="h-4 w-4" /></button>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Modal: Connect Account */}
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-6 animate-in fade-in zoom-in-95">
-              <div className="border-b border-slate-100 pb-4">
-                <h3 className="text-lg font-bold text-slate-900">Connect pCloud Account</h3>
-                <p className="text-xs text-slate-500">Configure account credentials and sharing parameters.</p>
-              </div>
-
-              <form onSubmit={handleCreate} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Account Friendly Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Primary pCloud Vault"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    pCloud Registered Email
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="pcloud-user@yourcompany.com"
-                    value={accountEmail}
-                    onChange={(e) => setAccountEmail(e.target.value)}
-                    className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Engine / Adapter Type
-                  </label>
-                  <select
-                    value={provider}
-                    onChange={(e: any) => setProvider(e.target.value)}
-                    className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
-                  >
-                    <option value="mock_pcloud">Mock pCloud Engine (Safe Test / Dry Run)</option>
-                    <option value="pcloud">Official pCloud REST API (Production)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    pCloud Access Token (Required for official REST API)
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="Enter OAuth access token or leave blank for mock"
-                    value={accessToken}
-                    onChange={(e) => setAccessToken(e.target.value)}
-                    className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Daily Share/Transfer Cap
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="10000"
-                    value={dailyLimit}
-                    onChange={(e) => setDailyLimit(Number(e.target.value))}
-                    className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  />
-                </div>
-
-                <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-xs font-semibold hover:opacity-95 flex items-center gap-1.5 shadow-sm"
-                  >
-                    <Check className="h-4 w-4" />
-                    Verify & Save pCloud Account
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+        {isModalOpen && <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"><div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-6">
+          <div className="border-b border-slate-100 pb-4"><h3 className="text-lg font-bold text-slate-900">Connect pCloud Account</h3><p className="text-xs text-slate-500">Credentials are exchanged over HTTPS and only the resulting token is encrypted and stored.</p></div>
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Account Friendly Name</label><input type="text" required placeholder="e.g. Client Premium Account" value={name} onChange={(e) => setName(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" /></div>
+            <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">pCloud Registered Email</label><input type="email" required placeholder="pcloud-user@yourcompany.com" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" /></div>
+            <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Engine / Adapter Type</label><select value={provider} onChange={(e: any) => setProvider(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white"><option value="pcloud">Official pCloud REST API (Production)</option><option value="mock_pcloud">Mock pCloud Engine (Dry Run)</option></select></div>
+            <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">pCloud Access Token or Account Password</label><input type="password" required placeholder="Paste access token or enter account password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 font-mono" /><p className="text-[11px] text-slate-500 mt-1">For a password, AutoWork exchanges it for a pCloud auth token and does not store the password.</p></div>
+            <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Daily Share/Transfer Cap</label><input type="number" min="1" max="10000" value={dailyLimit} onChange={(e) => setDailyLimit(Number(e.target.value))} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" /></div>
+            <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100"><button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600">Cancel</button><button type="submit" className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-xs font-semibold flex items-center gap-1.5"><Check className="h-4 w-4" />Verify & Save pCloud Account</button></div>
+          </form>
+        </div></div>}
       </div>
     </Shell>
   );
