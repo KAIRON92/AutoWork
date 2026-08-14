@@ -2,20 +2,20 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
+RUN apk add --no-cache openssl
 COPY backend/package*.json ./
 COPY prisma ./prisma
 RUN npm install
 
-# Build only the NestJS backend source. Workers and legacy automation modules
-# have their own build/runtime image and must not be included in the backend
-# TypeScript program (tsconfig.rootDir is ./src).
 COPY backend/ ./
+RUN npx prisma generate --schema=./prisma/schema.prisma
 RUN npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+RUN apk add --no-cache openssl
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
