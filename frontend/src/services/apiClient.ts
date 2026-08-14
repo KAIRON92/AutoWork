@@ -7,32 +7,28 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: 15000,
+  withCredentials: true,
 });
 
-// Interceptor to inject stored JWT token
 apiClient.interceptors.request.use(
   (config) => {
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('autowork_jwt_token');
-      if (token && config.headers) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-    }
+    // Authentication is cookie-based. Never put pCloud credentials, passwords,
+    // or JWTs into request URLs or application logs.
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
-// Interceptor to handle auth errors
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('autowork_jwt_token');
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      const pathname = window.location.pathname;
+      if (!['/login', '/register', '/forgot-password', '/reset-password'].some((route) => pathname.startsWith(route))) {
+        window.location.href = `/login?redirect=${encodeURIComponent(pathname)}`;
       }
     }
     return Promise.reject(error);
-  }
+  },
 );
