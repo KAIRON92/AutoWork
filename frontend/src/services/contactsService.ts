@@ -1,5 +1,4 @@
 import { apiClient } from './apiClient';
-import { mockContacts, mockContactLists } from './mockData';
 import { Contact, ContactList, ImportJob } from '../types';
 
 export interface CreateContactPayload {
@@ -20,12 +19,8 @@ export interface ImportContactsPayload {
 
 export const contactsService = {
   async getContacts(search?: string): Promise<Contact[]> {
-    try {
-      const response = await apiClient.get('/contacts', { params: { search } });
-      return response.data;
-    } catch {
-      return mockContacts;
-    }
+    const response = await apiClient.get('/contacts', { params: { search } });
+    return response.data;
   },
 
   async getAllContacts(search?: string): Promise<Contact[]> {
@@ -33,12 +28,8 @@ export const contactsService = {
   },
 
   async getContactLists(): Promise<ContactList[]> {
-    try {
-      const response = await apiClient.get('/contact-lists');
-      return response.data;
-    } catch {
-      return mockContactLists;
-    }
+    const response = await apiClient.get('/contact-lists');
+    return response.data;
   },
 
   async getAllLists(): Promise<ContactList[]> {
@@ -46,76 +37,27 @@ export const contactsService = {
   },
 
   async createContact(payload: CreateContactPayload): Promise<Contact> {
-    try {
-      const response = await apiClient.post('/contacts', payload);
-      return response.data;
-    } catch {
-      const newContact: Contact = {
-        id: `cnt-${Date.now()}`,
-        status: 'ACTIVE',
-        ...payload,
-        createdAt: new Date().toISOString(),
-      };
-      mockContacts.unshift(newContact);
-      return newContact;
-    }
+    const response = await apiClient.post('/contacts', payload);
+    return response.data;
   },
 
   async deleteContact(id: string): Promise<{ success: boolean }> {
-    try {
-      const response = await apiClient.delete(`/contacts/${id}`);
-      return response.data;
-    } catch {
-      const idx = mockContacts.findIndex((c) => c.id === id);
-      if (idx !== -1) mockContacts.splice(idx, 1);
-      return { success: true };
-    }
+    const response = await apiClient.delete(`/contacts/${id}`);
+    return response.data;
   },
 
   async createContactList(name: string, description?: string): Promise<ContactList> {
-    try {
-      const response = await apiClient.post('/contact-lists', { name, description });
-      return response.data;
-    } catch {
-      const newList: ContactList = {
-        id: `lst-${Date.now()}`,
-        name,
-        description,
-        memberCount: 0,
-        createdAt: new Date().toISOString(),
-      };
-      mockContactLists.unshift(newList);
-      return newList;
-    }
+    const response = await apiClient.post('/contact-lists', { name, description });
+    return response.data;
   },
 
   async deleteContactList(id: string): Promise<{ success: boolean }> {
-    try {
-      const response = await apiClient.delete(`/contact-lists/${id}`);
-      return response.data;
-    } catch {
-      const idx = mockContactLists.findIndex((l) => l.id === id);
-      if (idx !== -1) mockContactLists.splice(idx, 1);
-      return { success: true };
-    }
+    const response = await apiClient.delete(`/contact-lists/${id}`);
+    return response.data;
   },
 
   async importContacts(payload: ImportContactsPayload): Promise<ImportJob> {
-    try {
-      const response = await apiClient.post('/imports', payload);
-      return response.data;
-    } catch {
-      const importedCount = payload.rawText ? payload.rawText.split('\n').length : 5;
-      const job: ImportJob = {
-        id: `imp-${Date.now()}`,
-        filename: payload.filename,
-        status: 'COMPLETED',
-        totalRows: importedCount,
-        importedCount: importedCount,
-        failedCount: 0,
-        createdAt: new Date().toISOString(),
-      };
-      return job;
-    }
+    const response = await apiClient.post('/imports', payload);
+    return response.data;
   },
 };
