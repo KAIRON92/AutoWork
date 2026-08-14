@@ -24,14 +24,20 @@ export function middleware(request: NextRequest) {
   const isProtectedRoute = PROTECTED_ROUTES.some((route) => pathname.startsWith(route));
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname.startsWith(route));
 
+  // Only protect application routes at the edge. Do not assume that the
+  // presence of a cookie means the JWT is still valid: the backend verifies
+  // the cookie and the client handles 401 responses.
+  // This avoids stale-cookie redirect loops between /dashboard and /login.
   if (isProtectedRoute && !token) {
     const url = new URL('/login', request.url);
     url.searchParams.set('redirect', pathname);
     return NextResponse.redirect(url);
   }
 
-  if (isAuthRoute && token) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+  // Auth pages must remain reachable when a stale/expired cookie is present.
+  // The backend/client auth layer will establish or reject the session.
+  if (isAuthRoute) {
+    return NextResponse.next();
   }
 
   return NextResponse.next();
