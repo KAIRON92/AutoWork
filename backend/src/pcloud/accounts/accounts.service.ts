@@ -69,11 +69,24 @@ export class PCloudAccountsService {
   async getAccountCredentials(id: string, organizationId: string): Promise<string> {
     const account = await this.prisma.pCloudAccount.findFirst({ where: { id, organizationId } });
     if (!account) throw new NotFoundException(`pCloud Account ${id} not found`);
-    return account.provider === 'mock_pcloud' ? account.credentials : decryptPCloudCredential(account.credentials);
+    if (account.provider === 'mock_pcloud') {
+      if (process.env.PCLOUD_ALLOW_MOCK !== 'true') {
+        throw new BadRequestException('Mock pCloud accounts are disabled.');
+      }
+      return account.credentials;
+    }
+    return decryptPCloudCredential(account.credentials);
   }
 
   async create(organizationId: string, dto: CreatePCloudAccountDto) {
-    const provider = dto.provider || 'pcloud';
+    const provider = dto.provider || process.env.PCLOUD_DEFAULT_PROVIDER || 'pcloud';
+    if (provider === 'mock_pcloud' && process.env.PCLOUD_ALLOW_MOCK !== 'true') {
+      throw new BadRequestException('Mock pCloud accounts are disabled. Select the Official pCloud REST API (Production) provider.');
+    }
+    if (provider !== 'pcloud' && provider !== 'mock_pcloud') {
+      throw new BadRequestException(`Unsupported pCloud provider: ${provider}`);
+    }
+
     const rawCredential = dto.accessToken?.trim();
 
     if (provider === 'mock_pcloud') {
@@ -81,14 +94,26 @@ export class PCloudAccountsService {
       const adapter = PCloudAdapterFactory.getAdapter(provider);
       const verifyResult = await adapter.verifyConnection(credential);
       const account = await this.prisma.pCloudAccount.create({
-        data: { organizationId, name: dto.name, accountEmail: dto.accountEmail, provider, status: verifyResult.connected ? 'ACTIVE' : 'ERROR', dailyLimit: dto.dailyLimit || 500, sentToday: 0, folderId: dto.folderId || '0', credentials: credential, pcloudUserId: verifyResult.userInfo?.userId || undefined },
+        data: {
+          organizationId,
+          name: dto.name,
+          accountEmail: dto.accountEmail,
+          provider,
+          status: verifyResult.connected ? 'ACTIVE' : 'ERROR',
+          dailyLimit: dto.dailyLimit || 500,
+          sentToday: 0,
+          folderId: dto.folderId || '0',
+          credentials: credential,
+          pcloudUserId: verifyResult.userInfo?.userId || undefined,
+          lastUsedAt: verifyResult.connected ? new Date() : undefined,
+        },
       });
       return this.sanitizeAccount(account);
     }
 
     if (!rawCredential) throw new BadRequestException('Provide a pCloud access token or the pCloud account password');
 
-    const adapter = PCloudAdapterFactory.getAdapter(provider);
+    const adapter = PCloudAdapterFactory.getAdapter('pcloud');
     let credentialForStorage = rawCredential;
     let verifyResult = await adapter.verifyConnection(rawCredential);
     let apiHost = 'https://api.pcloud.com';
@@ -104,7 +129,20 @@ export class PCloudAccountsService {
 
     const credentials = encryptPCloudCredential(credentialForStorage);
     const account = await this.prisma.pCloudAccount.create({
-      data: { organizationId, name: dto.name, accountEmail: dto.accountEmail, provider, status: 'ACTIVE', dailyLimit: dto.dailyLimit || 500, sentToday: 0, folderId: dto.folderId || '0', credentials, pcloudUserId: verifyResult.userInfo?.userId || undefined, apiHost },
+      data: {
+        organizationId,
+        name: dto.name,
+        accountEmail: dto.accountEmail,
+        provider: 'pcloud',
+        status: 'ACTIVE',
+        dailyLimit: dto.dailyLimit || 500,
+        sentToday: 0,
+        folderId: dto.folderId || '0',
+        credentials,
+        pcloudUserId: verifyResult.userInfo?.userId || undefined,
+        apiHost,
+        lastUsedAt: new Date(),
+      },
     });
     return this.sanitizeAccount(account);
   }
@@ -112,10 +150,17 @@ export class PCloudAccountsService {
   async testConnection(id: string, organizationId: string) {
     const account = await this.prisma.pCloudAccount.findFirst({ where: { id, organizationId } });
     if (!account) throw new NotFoundException(`pCloud Account ${id} not found`);
+    if (account.provider === 'mock_pcloud' && process.env.PCLOUD_ALLOW_MOCK !== 'true') {
+      throw new BadRequestException('This account uses the disabled mock provider. Disconnect it and add the account using Official pCloud REST API (Production).');
+    }
+
     const credential = account.provider === 'mock_pcloud' ? account.credentials : decryptPCloudCredential(account.credentials);
     const adapter = PCloudAdapterFactory.getAdapter(account.provider);
     const result = await adapter.verifyConnection(credential, account.apiHost || undefined);
-    await this.prisma.pCloudAccount.update({ where: { id }, data: { status: result.connected ? 'ACTIVE' : 'ERROR', lastUsedAt: new Date() } });
+    await this.prisma.pCloudAccount.update({
+      where: { id },
+      data: { status: result.connected ? 'ACTIVE' : 'ERROR', lastUsedAt: result.connected ? new Date() : account.lastUsedAt },
+    });
     return result;
   }
 
