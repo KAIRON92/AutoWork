@@ -23,7 +23,6 @@ export class PCloudClient {
     try {
       const res = await fetch(`${host}/userinfo?auth=${encodeURIComponent(accessToken)}`);
       const data = await res.json();
-
       if (data.result === 0) {
         return {
           userId: data.userid ? data.userid.toString() : 'unknown',
@@ -35,7 +34,6 @@ export class PCloudClient {
           registered: data.registered || new Date().toISOString(),
         };
       }
-
       throw PCloudErrorMapper.mapRawError(data.result, data.error);
     } catch (err: any) {
       if (err.code) throw err;
@@ -43,14 +41,11 @@ export class PCloudClient {
     }
   }
 
-  async listFolder(folderId: string = '0', accessToken: string, apiHost?: string): Promise<PCloudItemMetadata[]> {
+  async listFolder(folderId = '0', accessToken: string, apiHost?: string): Promise<PCloudItemMetadata[]> {
     const host = this.getHost(apiHost);
     try {
-      const res = await fetch(
-        `${host}/listfolder?auth=${encodeURIComponent(accessToken)}&folderid=${encodeURIComponent(folderId)}`
-      );
+      const res = await fetch(`${host}/listfolder?auth=${encodeURIComponent(accessToken)}&folderid=${encodeURIComponent(folderId)}`);
       const data = await res.json();
-
       if (data.result === 0 && data.metadata && Array.isArray(data.metadata.contents)) {
         return data.metadata.contents.map((item: any) => ({
           fileId: item.fileid ? item.fileid.toString() : undefined,
@@ -65,7 +60,6 @@ export class PCloudClient {
           metadata: item,
         }));
       }
-
       throw PCloudErrorMapper.mapRawError(data.result, data.error);
     } catch (err: any) {
       if (err.code) throw err;
@@ -76,11 +70,8 @@ export class PCloudClient {
   async getFileMetadata(fileId: string, accessToken: string, apiHost?: string): Promise<PCloudItemMetadata> {
     const host = this.getHost(apiHost);
     try {
-      const res = await fetch(
-        `${host}/stat?auth=${encodeURIComponent(accessToken)}&fileid=${encodeURIComponent(fileId)}`
-      );
+      const res = await fetch(`${host}/stat?auth=${encodeURIComponent(accessToken)}&fileid=${encodeURIComponent(fileId)}`);
       const data = await res.json();
-
       if (data.result === 0 && data.metadata) {
         const meta = data.metadata;
         return {
@@ -96,7 +87,6 @@ export class PCloudClient {
           metadata: meta,
         };
       }
-
       throw PCloudErrorMapper.mapRawError(data.result, data.error);
     } catch (err: any) {
       if (err.code) throw err;
@@ -104,24 +94,14 @@ export class PCloudClient {
     }
   }
 
-  async uploadFile(
-    filename: string,
-    buffer: Buffer,
-    mimeType: string,
-    folderId: string = '0',
-    accessToken: string,
-    apiHost?: string
-  ): Promise<PCloudItemMetadata> {
+  async uploadFile(filename: string, buffer: Buffer, mimeType: string, folderId = '0', accessToken: string, apiHost?: string): Promise<PCloudItemMetadata> {
     const host = this.getHost(apiHost);
     try {
       const formData = new FormData();
-      const blob = new Blob([new Uint8Array(buffer)], { type: mimeType });
-      formData.append('file', blob, filename);
-
+      formData.append('file', new Blob([new Uint8Array(buffer)], { type: mimeType }), filename);
       const url = `${host}/uploadfile?auth=${encodeURIComponent(accessToken)}&folderid=${encodeURIComponent(folderId)}&filename=${encodeURIComponent(filename)}`;
       const res = await fetch(url, { method: 'POST', body: formData });
       const data = await res.json();
-
       if (data.result === 0 && data.metadata && data.metadata.length > 0) {
         const meta = data.metadata[0];
         return {
@@ -130,14 +110,13 @@ export class PCloudClient {
           name: meta.name,
           isFolder: false,
           size: meta.size || buffer.length,
-          mimeType: mimeType,
+          mimeType,
           path: meta.path || `/${meta.name}`,
           created: meta.created || new Date().toISOString(),
           modified: meta.modified || new Date().toISOString(),
           metadata: meta,
         };
       }
-
       throw PCloudErrorMapper.mapRawError(data.result, data.error);
     } catch (err: any) {
       if (err.code) throw err;
@@ -148,17 +127,31 @@ export class PCloudClient {
   async shareFolder(options: PCloudShareOptions, accessToken: string, apiHost?: string): Promise<PCloudShareResult> {
     const host = this.getHost(apiHost);
     const targetFolderId = options.folderId || '0';
-    const permissions = options.permissions !== undefined ? options.permissions : 0; // Default read-only
-
+    const permissions = options.permissions !== undefined ? options.permissions : 0;
     try {
-      let url = `${host}/sharefolder?auth=${encodeURIComponent(accessToken)}&folderid=${encodeURIComponent(targetFolderId)}&mail=${encodeURIComponent(options.recipientEmail)}&permissions=${permissions}`;
-      if (options.message) {
-        url += `&message=${encodeURIComponent(options.message)}`;
+      const selected = options.fileId ? await this.getFileMetadata(options.fileId, accessToken, apiHost) : undefined;
+      if (selected && !selected.isFolder) {
+        return {
+          success: false,
+          operationType: 'sharefolder',
+          recipientEmail: options.recipientEmail,
+          descriptionSnapshot: options.message,
+          pcloudAccountId: options.pcloudAccountId || 'default',
+          pcloudFileId: options.fileId,
+          error: {
+            code: 'PCLOUD_FILE_SHARE_UNSUPPORTED' as any,
+            message: 'pCloud sharefolder accepts folders only. Use uploadtransfer for a file campaign.',
+            isTransient: false,
+            timestamp: new Date().toISOString(),
+          },
+          timestamp: new Date().toISOString(),
+        };
       }
 
+      let url = `${host}/sharefolder?auth=${encodeURIComponent(accessToken)}&folderid=${encodeURIComponent(targetFolderId)}&mail=${encodeURIComponent(options.recipientEmail)}&permissions=${permissions}`;
+      if (options.message) url += `&message=${encodeURIComponent(options.message)}`;
       const res = await fetch(url, { method: 'POST' });
       const data = await res.json();
-
       if (data.result === 0) {
         return {
           success: true,
@@ -171,90 +164,72 @@ export class PCloudClient {
           timestamp: new Date().toISOString(),
         };
       }
-
       const error = PCloudErrorMapper.mapRawError(data.result, data.error);
-      return {
-        success: false,
-        operationType: 'sharefolder',
-        recipientEmail: options.recipientEmail,
-        descriptionSnapshot: options.message,
-        pcloudAccountId: options.pcloudAccountId || 'default',
-        pcloudFileId: options.fileId || targetFolderId,
-        error,
-        timestamp: new Date().toISOString(),
-      };
+      return { success: false, operationType: 'sharefolder', recipientEmail: options.recipientEmail, descriptionSnapshot: options.message, pcloudAccountId: options.pcloudAccountId || 'default', pcloudFileId: options.fileId || targetFolderId, error, timestamp: new Date().toISOString() };
     } catch (err: any) {
       const error = err.code ? err : PCloudErrorMapper.fromNetworkError(err);
-      return {
-        success: false,
-        operationType: 'sharefolder',
-        recipientEmail: options.recipientEmail,
-        descriptionSnapshot: options.message,
-        pcloudAccountId: options.pcloudAccountId || 'default',
-        pcloudFileId: options.fileId || targetFolderId,
-        error,
-        timestamp: new Date().toISOString(),
-      };
+      return { success: false, operationType: 'sharefolder', recipientEmail: options.recipientEmail, descriptionSnapshot: options.message, pcloudAccountId: options.pcloudAccountId || 'default', pcloudFileId: options.fileId || targetFolderId, error, timestamp: new Date().toISOString() };
     }
+  }
+
+  private async downloadFileBuffer(fileId: string, accessToken: string, apiHost?: string): Promise<{ buffer: Buffer; name: string; mimeType: string }> {
+    const host = this.getHost(apiHost);
+    const metadata = await this.getFileMetadata(fileId, accessToken, apiHost);
+    if (metadata.isFolder) throw new Error('uploadtransfer requires a file, not a folder');
+
+    const linkRes = await fetch(`${host}/getfilelink?auth=${encodeURIComponent(accessToken)}&fileid=${encodeURIComponent(fileId)}`);
+    const linkData = await linkRes.json();
+    if (linkData.result !== 0 || !linkData.hosts?.length || !linkData.path) {
+      throw PCloudErrorMapper.mapRawError(linkData.result, linkData.error);
+    }
+
+    const fileRes = await fetch(`https://${linkData.hosts[0]}${linkData.path}`);
+    if (!fileRes.ok) throw new Error(`pCloud file download failed with HTTP ${fileRes.status}`);
+    const arrayBuffer = await fileRes.arrayBuffer();
+    return { buffer: Buffer.from(arrayBuffer), name: metadata.name, mimeType: metadata.mimeType };
   }
 
   async uploadTransfer(options: PCloudTransferOptions, accessToken: string, apiHost?: string): Promise<PCloudShareResult> {
     const host = this.getHost(apiHost);
+    const recipientEmail = options.recipientEmails[0] || '';
     try {
-      const receiverMails = options.recipientEmails.join(',');
-      let url = `${host}/uploadtransfer?auth=${encodeURIComponent(accessToken)}&sendermail=${encodeURIComponent(options.senderEmail)}&receivermails=${encodeURIComponent(receiverMails)}`;
-      if (options.message) {
-        url += `&message=${encodeURIComponent(options.message)}`;
+      if (!options.fileId) {
+        throw new Error('A pCloud fileId is required for uploadtransfer');
       }
 
-      const res = await fetch(url, { method: 'POST' });
-      const data = await res.json();
+      const file = await this.downloadFileBuffer(options.fileId, accessToken, apiHost);
+      const formData = new FormData();
+      formData.append('sendermail', options.senderEmail);
+      formData.append('receivermails', options.recipientEmails.join(','));
+      if (options.message) formData.append('message', options.message.slice(0, 160));
+      formData.append('file', new Blob([new Uint8Array(file.buffer)], { type: file.mimeType }), options.filename || file.name);
 
+      const res = await fetch(`${host}/uploadtransfer`, { method: 'POST', body: formData });
+      const data = await res.json();
       if (data.result === 0) {
         return {
           success: true,
           operationType: 'uploadtransfer',
           pcloudReferenceId: data.progresshash || data.transferid || `transfer-${Date.now()}`,
-          recipientEmail: options.recipientEmails[0] || '',
+          recipientEmail,
           descriptionSnapshot: options.message,
           pcloudAccountId: options.pcloudAccountId || 'default',
-          pcloudFileId: options.fileId || '0',
+          pcloudFileId: options.fileId,
           timestamp: new Date().toISOString(),
         };
       }
-
       const error = PCloudErrorMapper.mapRawError(data.result, data.error);
-      return {
-        success: false,
-        operationType: 'uploadtransfer',
-        recipientEmail: options.recipientEmails[0] || '',
-        descriptionSnapshot: options.message,
-        pcloudAccountId: options.pcloudAccountId || 'default',
-        pcloudFileId: options.fileId || '0',
-        error,
-        timestamp: new Date().toISOString(),
-      };
+      return { success: false, operationType: 'uploadtransfer', recipientEmail, descriptionSnapshot: options.message, pcloudAccountId: options.pcloudAccountId || 'default', pcloudFileId: options.fileId, error, timestamp: new Date().toISOString() };
     } catch (err: any) {
       const error = err.code ? err : PCloudErrorMapper.fromNetworkError(err);
-      return {
-        success: false,
-        operationType: 'uploadtransfer',
-        recipientEmail: options.recipientEmails[0] || '',
-        descriptionSnapshot: options.message,
-        pcloudAccountId: options.pcloudAccountId || 'default',
-        pcloudFileId: options.fileId || '0',
-        error,
-        timestamp: new Date().toISOString(),
-      };
+      return { success: false, operationType: 'uploadtransfer', recipientEmail, descriptionSnapshot: options.message, pcloudAccountId: options.pcloudAccountId || 'default', pcloudFileId: options.fileId || '0', error, timestamp: new Date().toISOString() };
     }
   }
 
   async deleteFile(fileId: string, accessToken: string, apiHost?: string): Promise<boolean> {
     const host = this.getHost(apiHost);
     try {
-      const res = await fetch(
-        `${host}/deletefile?auth=${encodeURIComponent(accessToken)}&fileid=${encodeURIComponent(fileId)}`
-      );
+      const res = await fetch(`${host}/deletefile?auth=${encodeURIComponent(accessToken)}&fileid=${encodeURIComponent(fileId)}`);
       const data = await res.json();
       return data.result === 0;
     } catch {
