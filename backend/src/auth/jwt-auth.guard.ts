@@ -1,6 +1,13 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
+function readCookie(request: any, name: string): string | undefined {
+  const raw = request.headers?.cookie as string | undefined;
+  if (!raw) return undefined;
+  const match = raw.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : undefined;
+}
+
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(private readonly jwtService: JwtService) {}
@@ -11,7 +18,6 @@ export class JwtAuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const path = request.originalUrl || request.url || '';
 
-    // Public endpoints used before authentication and for operational health/docs.
     if (
       path.startsWith('/api/v1/auth/login') ||
       path.startsWith('/api/v1/auth/register') ||
@@ -24,11 +30,11 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     const authorization = request.headers?.authorization as string | undefined;
-    if (!authorization?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Authentication required');
-    }
+    const bearerToken = authorization?.startsWith('Bearer ')
+      ? authorization.slice('Bearer '.length).trim()
+      : undefined;
+    const token = bearerToken || readCookie(request, 'autowork_jwt_token');
 
-    const token = authorization.slice('Bearer '.length).trim();
     if (!token) throw new UnauthorizedException('Authentication required');
 
     try {
