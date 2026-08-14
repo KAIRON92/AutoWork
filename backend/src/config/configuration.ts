@@ -8,19 +8,21 @@ export interface AppConfig {
   redisHost: string;
   redisPort: number;
   jwtSecret: string;
-  pcloudAppKey: string;
-  pcloudAppSecret: string;
+  pcloudApiHost: string;
+  pcloudClientId: string;
+  pcloudClientSecret: string;
   pcloudAccessToken: string;
 }
 
 export const configuration = (): AppConfig => ({
-  port: parseInt(process.env.PORT || '3001', 10),
+  port: parseInt(process.env.PORT || '4000', 10),
   environment: process.env.NODE_ENV || 'development',
-  databaseUrl: process.env.DATABASE_URL || 'file:./dev.db',
+  databaseUrl: process.env.DATABASE_URL || 'postgresql://autowork:autoworkpass@localhost:5432/autowork_db?schema=public',
   redisHost: process.env.REDIS_HOST || 'localhost',
   redisPort: parseInt(process.env.REDIS_PORT || '6379', 10),
-  jwtSecret: process.env.JWT_SECRET || 'autowork-super-secret-jwt-key-2026',
-  pcloudAppKey: process.env.PCLOUD_APP_KEY || 'placeholder_app_key',
-  pcloudAppSecret: process.env.PCLOUD_APP_SECRET || 'placeholder_app_secret',
-  pcloudAccessToken: process.env.PCLOUD_ACCESS_TOKEN || 'placeholder_access_token',
+  jwtSecret: process.env.JWT_SECRET || 'replace-with-a-long-random-secret',
+  pcloudApiHost: process.env.PCLOUD_API_HOST || 'https://api.pcloud.com',
+  pcloudClientId: process.env.PCLOUD_CLIENT_ID || '',
+  pcloudClientSecret: process.env.PCLOUD_CLIENT_SECRET || '',
+  pcloudAccessToken: process.env.PCLOUD_ACCESS_TOKEN || '',
 });
