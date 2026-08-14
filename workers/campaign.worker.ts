@@ -1,5 +1,5 @@
 import { Worker, Job, Queue } from 'bullmq';
-import { PrismaClient } from '../backend/node_modules/.prisma/client';
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -35,26 +35,22 @@ export function createCampaignWorker(redisConnection: { host: string; port: numb
         if (!['PENDING', 'QUEUED', 'RETRYING'].includes(recipient.status)) continue;
 
         await prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'QUEUED' } });
-        await pcloudQueue.add(
-          'pcloud-share',
-          {
-            campaignId: campaign.id,
-            organizationId: campaign.organizationId,
-            recipientId: recipient.id,
-            recipientEmail: recipient.recipientEmail,
-            pcloudAccountId: data.pcloudAccountId,
-            pcloudProvider: campaign.pcloudAccount.provider,
-            pcloudFileId: data.pcloudFileId,
-            templateContent: campaign.template.content,
-            operationType: data.operationType || 'uploadtransfer',
-          },
-          {
-            attempts: data.retryCount || 3,
-            backoff: { type: 'exponential', delay: 3000 },
-            removeOnComplete: 1000,
-            removeOnFail: 1000,
-          }
-        );
+        await pcloudQueue.add('pcloud-share', {
+          campaignId: campaign.id,
+          organizationId: campaign.organizationId,
+          recipientId: recipient.id,
+          recipientEmail: recipient.recipientEmail,
+          pcloudAccountId: data.pcloudAccountId,
+          pcloudProvider: campaign.pcloudAccount.provider,
+          pcloudFileId: data.pcloudFileId,
+          templateContent: campaign.template.content,
+          operationType: data.operationType || 'uploadtransfer',
+        }, {
+          attempts: data.retryCount || 3,
+          backoff: { type: 'exponential', delay: 3000 },
+          removeOnComplete: 1000,
+          removeOnFail: 1000,
+        });
         queued++;
       }
 
