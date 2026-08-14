@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
 import { ConfigModule } from './config/config.module';
 import { JobsModule } from './jobs/jobs.module';
 import { AuthModule } from './auth/auth.module';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { UsersModule } from './users/users.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { PCloudModule } from './pcloud/pcloud.module';
@@ -32,6 +34,12 @@ import { AdminModule } from './admin/admin.module';
     DashboardModule,
     HealthModule,
     AdminModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
   ],
 })
 export class AppModule {}
