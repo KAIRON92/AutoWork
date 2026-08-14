@@ -7,6 +7,7 @@ export enum PCloudErrorCode {
   PCLOUD_QUOTA_EXCEEDED = 'PCLOUD_QUOTA_EXCEEDED',
   PCLOUD_SHARE_EXISTS = 'PCLOUD_SHARE_EXISTS',
   PCLOUD_VERIFICATION_REQUIRED = 'PCLOUD_VERIFICATION_REQUIRED',
+  PCLOUD_FILE_SHARE_UNSUPPORTED = 'PCLOUD_FILE_SHARE_UNSUPPORTED',
   PCLOUD_TEMPORARY_ERROR = 'PCLOUD_TEMPORARY_ERROR',
   PCLOUD_UNKNOWN_ERROR = 'PCLOUD_UNKNOWN_ERROR',
 }
@@ -15,7 +16,7 @@ export interface PCloudError {
   code: PCloudErrorCode;
   rawCode?: number;
   message: string;
-  isTransient: boolean; // Indicates if error is retryable
+  isTransient: boolean;
   timestamp: string;
 }
 
@@ -48,7 +49,7 @@ export interface PCloudShareOptions {
   fileId?: string;
   recipientEmail: string;
   message?: string;
-  permissions?: number; // 1: create, 2: modify, 4: delete (default: 0 = read-only)
+  permissions?: number;
   pcloudAccountId?: string;
   organizationId?: string;
   campaignId?: string;
@@ -58,6 +59,8 @@ export interface PCloudShareOptions {
 export interface PCloudTransferOptions {
   fileId?: string;
   folderId?: string;
+  filename?: string;
+  mimeType?: string;
   senderEmail: string;
   recipientEmails: string[];
   message?: string;
