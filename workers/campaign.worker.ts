@@ -22,7 +22,7 @@ export function createCampaignWorker(redisConnection: { host: string; port: numb
       const data = job.data;
       const campaign = await prisma.campaign.findFirst({
         where: { id: data.campaignId, organizationId: data.organizationId },
-        include: { recipients: true },
+        include: { recipients: true, pcloudAccount: true, template: true },
       });
 
       if (!campaign) throw new Error(`Campaign ${data.campaignId} not found`);
@@ -43,9 +43,9 @@ export function createCampaignWorker(redisConnection: { host: string; port: numb
             recipientId: recipient.id,
             recipientEmail: recipient.recipientEmail,
             pcloudAccountId: data.pcloudAccountId,
-            pcloudProvider: campaign.pcloudAccount?.provider || 'pcloud',
+            pcloudProvider: campaign.pcloudAccount.provider,
             pcloudFileId: data.pcloudFileId,
-            templateContent: (await prisma.template.findUnique({ where: { id: data.templateId } }))?.content || '',
+            templateContent: campaign.template.content,
             operationType: data.operationType || 'uploadtransfer',
           },
           {
