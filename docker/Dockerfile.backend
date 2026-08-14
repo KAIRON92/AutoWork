@@ -6,9 +6,10 @@ COPY backend/package*.json ./
 COPY prisma ./prisma
 RUN npm install
 
+# Build only the NestJS backend source. Workers and legacy automation modules
+# have their own build/runtime image and must not be included in the backend
+# TypeScript program (tsconfig.rootDir is ./src).
 COPY backend/ ./
-COPY automation-modules ./automation-modules
-COPY workers ./workers
 RUN npm run build
 
 FROM node:20-alpine AS runner
