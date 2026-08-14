@@ -1,5 +1,5 @@
 import { Worker, Job } from 'bullmq';
-import { PrismaClient } from '../backend/node_modules/.prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { PCloudAdapterFactory } from '../backend/src/pcloud/pcloud.factory';
 import { TemplateVariableResolver } from '../backend/src/templates/template-variable.resolver';
 import { decryptPCloudCredential } from '../backend/src/pcloud/pcloud-credentials';
@@ -11,14 +11,6 @@ export interface PCloudShareJobData {
   recipientId: string;
   organizationId: string;
   recipientEmail: string;
-  contactData?: {
-    firstName?: string;
-    lastName?: string;
-    fullName?: string;
-    company?: string;
-    phone?: string;
-    target?: string;
-  };
   pcloudAccountId: string;
   pcloudProvider: string;
   pcloudFileId: string;
@@ -31,13 +23,8 @@ export function createPCloudShareWorker(redisConnection: { host: string; port: n
     'pcloud-share-queue',
     async (job: Job<PCloudShareJobData>) => {
       const data = job.data;
-      const recipient = await prisma.campaignRecipient.findFirst({
-        where: { id: data.recipientId, campaignId: data.campaignId },
-      });
-      const campaign = await prisma.campaign.findFirst({
-        where: { id: data.campaignId, organizationId: data.organizationId },
-        include: { pcloudAccount: true, pcloudFile: true },
-      });
+      const recipient = await prisma.campaignRecipient.findFirst({ where: { id: data.recipientId, campaignId: data.campaignId } });
+      const campaign = await prisma.campaign.findFirst({ where: { id: data.campaignId, organizationId: data.organizationId }, include: { pcloudAccount: true, pcloudFile: true } });
 
       if (!recipient || !campaign) throw new Error('Campaign recipient or campaign not found');
       if (campaign.status === 'PAUSED') return { success: false, skipped: true };
@@ -59,28 +46,8 @@ export function createPCloudShareWorker(redisConnection: { host: string; port: n
       });
 
       const result = data.operationType === 'sharefolder'
-        ? await adapter.shareFolder({
-            folderId: campaign.pcloudFile.folderId || '0',
-            fileId: campaign.pcloudFile.fileId,
-            recipientEmail: recipient.recipientEmail,
-            message: resolvedText,
-            pcloudAccountId: account.id,
-            organizationId: campaign.organizationId,
-            campaignId: campaign.id,
-            jobId: job.id,
-          }, credential)
-        : await adapter.createTransfer({
-            fileId: campaign.pcloudFile.fileId,
-            filename: campaign.pcloudFile.name,
-            mimeType: campaign.pcloudFile.mimeType,
-            senderEmail: account.accountEmail,
-            recipientEmails: [recipient.recipientEmail],
-            message: resolvedText,
-            pcloudAccountId: account.id,
-            organizationId: campaign.organizationId,
-            campaignId: campaign.id,
-            jobId: job.id,
-          }, credential);
+        ? await adapter.shareFolder({ folderId: campaign.pcloudFile.folderId || '0', fileId: campaign.pcloudFile.fileId, recipientEmail: recipient.recipientEmail, message: resolvedText, pcloudAccountId: account.id, organizationId: campaign.organizationId, campaignId: campaign.id, jobId: job.id }, credential)
+        : await adapter.createTransfer({ fileId: campaign.pcloudFile.fileId, filename: campaign.pcloudFile.name, mimeType: campaign.pcloudFile.mimeType, senderEmail: account.accountEmail, recipientEmails: [recipient.recipientEmail], message: resolvedText, pcloudAccountId: account.id, organizationId: campaign.organizationId, campaignId: campaign.id, jobId: job.id }, credential);
 
       if (!result.success && result.error?.isTransient && job.attemptsMade < (job.opts.attempts || 3)) {
         await prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'RETRYING', errorCode: result.error.code, errorMessage: result.error.message } });
@@ -106,17 +73,7 @@ export function createPCloudShareWorker(redisConnection: { host: string; port: n
         },
       });
 
-      await prisma.campaignRecipient.update({
-        where: { id: recipient.id },
-        data: {
-          status: result.success ? 'SHARED' : 'FAILED',
-          pcloudShareExecutionId: execution.id,
-          resolvedDescription: resolvedText,
-          randomCode,
-          errorCode: result.error?.code || null,
-          errorMessage: result.error?.message || null,
-        },
-      });
+      await prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: result.success ? 'SHARED' : 'FAILED', pcloudShareExecutionId: execution.id, resolvedDescription: resolvedText, randomCode, errorCode: result.error?.code || null, errorMessage: result.error?.message || null } });
 
       if (result.success) {
         await prisma.campaign.update({ where: { id: campaign.id }, data: { sharedCount: { increment: 1 } } });
@@ -125,8 +82,8 @@ export function createPCloudShareWorker(redisConnection: { host: string; port: n
         await prisma.campaign.update({ where: { id: campaign.id }, data: { failedCount: { increment: 1 } } });
       }
 
-      const latest = await prisma.campaign.findUnique({ where: { id: campaign.id }, select: { totalCount: true, sharedCount: true, failedCount: true, status: true } });
-      if (latest && latest.sharedCount + latest.failedCount >= latest.totalCount && latest.totalCount > 0) {
+      const latest = await prisma.campaign.findUnique({ where: { id: campaign.id }, select: { totalCount: true, sharedCount: true, failedCount: true } });
+      if (latest && latest.totalCount > 0 && latest.sharedCount + latest.failedCount >= latest.totalCount) {
         await prisma.campaign.update({ where: { id: campaign.id }, data: { status: 'COMPLETED' } });
       }
 
@@ -137,6 +94,5 @@ export function createPCloudShareWorker(redisConnection: { host: string; port: n
 
   worker.on('completed', (job) => console.log(`[pCloud Worker] Job ${job.id} completed for recipient ${job.data.recipientEmail}`));
   worker.on('failed', (job, err) => console.error(`[pCloud Worker] Job ${job?.id} failed: ${err.message}`));
-
   return worker;
 }
