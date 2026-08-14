@@ -1,23 +1,24 @@
-# Autowork.com Worker Dockerfile
+# Autowork.com pCloud worker Dockerfile
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 COPY backend/package*.json ./
-COPY prisma ./prisma
 RUN npm install
 
-COPY backend/ ./
+COPY backend/ ./backend/
+COPY prisma ./prisma
 COPY workers ./workers
 RUN npx prisma generate --schema=./prisma/schema.prisma
-RUN npm run build
+RUN npm --prefix ./backend run build
 
 FROM node:20-alpine AS runner
-WORKDIR /app
+WORKDIR /app/backend
 
 ENV NODE_ENV=production
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/backend/package*.json ./
+COPY --from=builder /app/backend/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/workers ./workers
+COPY --from=builder /app/prisma ../prisma
+COPY --from=builder /app/workers ../workers
 
-CMD ["npx", "ts-node", "workers/pcloud-share.worker.ts"]
+CMD ["npx", "ts-node", "../workers/pcloud-share.worker.ts"]
