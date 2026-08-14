@@ -3,7 +3,7 @@ import { User, Organization } from '../types';
 
 export interface LoginPayload {
   email: string;
-  passwordHash: string;
+  password: string;
 }
 
 export interface RegisterPayload {
