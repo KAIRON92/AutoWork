@@ -3,7 +3,7 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
 
 @ApiTags('Health')
-@Controller()
+@Controller('api')
 export class HealthController {
   constructor(private prisma: PrismaService) {}
 
@@ -16,17 +16,17 @@ export class HealthController {
         await this.prisma.$queryRaw`SELECT 1`;
       }
     } catch {
-      dbStatus = 'HEALTHY'; // Local development mode
+      dbStatus = 'UNAVAILABLE';
     }
 
     return {
-      status: 'OK',
+      status: dbStatus === 'HEALTHY' ? 'OK' : 'DEGRADED',
       timestamp: new Date().toISOString(),
       subsystems: {
         api: 'HEALTHY',
-        database: 'HEALTHY',
-        redisQueue: 'HEALTHY',
-        pcloudWorker: 'READY',
+        database: dbStatus,
+        redisQueue: 'UNKNOWN',
+        pcloudWorker: 'UNKNOWN',
       },
       environment: process.env.NODE_ENV || 'development',
       version: '1.0.0',
