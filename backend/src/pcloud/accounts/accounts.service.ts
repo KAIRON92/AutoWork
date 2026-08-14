@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PCloudAdapterFactory } from '../pcloud.factory';
-import { PCloudErrorCode } from '../pcloud.interface';
+import { encryptPCloudCredential, decryptPCloudCredential } from '../pcloud-credentials';
 
 export interface CreatePCloudAccountDto {
   name: string;
@@ -19,44 +19,33 @@ export class PCloudAccountsService {
   private sanitizeAccount(account: any) {
     if (!account) return null;
     const { credentials, ...safe } = account;
-    return {
-      ...safe,
-      hasCredentials: !!credentials && credentials.length > 0,
-    };
+    return { ...safe, hasCredentials: !!credentials && credentials.length > 0 };
   }
 
   async findAll(organizationId: string) {
-    const accounts = await this.prisma.pCloudAccount.findMany({
-      where: { organizationId },
-      orderBy: { createdAt: 'desc' },
-    });
+    const accounts = await this.prisma.pCloudAccount.findMany({ where: { organizationId }, orderBy: { createdAt: 'desc' } });
     return accounts.map((a) => this.sanitizeAccount(a));
   }
 
   async findOne(id: string, organizationId: string) {
-    const account = await this.prisma.pCloudAccount.findFirst({
-      where: { id, organizationId },
-    });
+    const account = await this.prisma.pCloudAccount.findFirst({ where: { id, organizationId } });
     if (!account) throw new NotFoundException(`pCloud Account ${id} not found`);
     return this.sanitizeAccount(account);
   }
 
   async getAccountCredentials(id: string, organizationId: string): Promise<string> {
-    const account = await this.prisma.pCloudAccount.findFirst({
-      where: { id, organizationId },
-    });
+    const account = await this.prisma.pCloudAccount.findFirst({ where: { id, organizationId } });
     if (!account) throw new NotFoundException(`pCloud Account ${id} not found`);
-    return account.credentials;
+    return account.provider === 'mock_pcloud' ? account.credentials : decryptPCloudCredential(account.credentials);
   }
 
   async create(organizationId: string, dto: CreatePCloudAccountDto) {
     const provider = dto.provider || 'mock_pcloud';
-    const token = dto.accessToken || 'mock_access_token';
-
-    // Verify connection before saving
+    const rawCredential = dto.accessToken || 'mock_access_token';
     const adapter = PCloudAdapterFactory.getAdapter(provider);
-    const verifyResult = await adapter.verifyConnection(token);
+    const verifyResult = await adapter.verifyConnection(rawCredential);
 
+    const credentials = provider === 'mock_pcloud' ? rawCredential : encryptPCloudCredential(rawCredential);
     const account = await this.prisma.pCloudAccount.create({
       data: {
         organizationId,
@@ -67,59 +56,35 @@ export class PCloudAccountsService {
         dailyLimit: dto.dailyLimit || 500,
         sentToday: 0,
         folderId: dto.folderId || '0',
-        credentials: token,
+        credentials,
         pcloudUserId: verifyResult.userInfo?.userId || undefined,
       },
     });
-
     return this.sanitizeAccount(account);
   }
 
   async testConnection(id: string, organizationId: string) {
-    const account = await this.prisma.pCloudAccount.findFirst({
-      where: { id, organizationId },
-    });
+    const account = await this.prisma.pCloudAccount.findFirst({ where: { id, organizationId } });
     if (!account) throw new NotFoundException(`pCloud Account ${id} not found`);
-
+    const credential = account.provider === 'mock_pcloud' ? account.credentials : decryptPCloudCredential(account.credentials);
     const adapter = PCloudAdapterFactory.getAdapter(account.provider);
-    const result = await adapter.verifyConnection(account.credentials);
-
-    await this.prisma.pCloudAccount.update({
-      where: { id },
-      data: {
-        status: result.connected ? 'ACTIVE' : 'ERROR',
-        lastUsedAt: new Date(),
-      },
-    });
-
+    const result = await adapter.verifyConnection(credential);
+    await this.prisma.pCloudAccount.update({ where: { id }, data: { status: result.connected ? 'ACTIVE' : 'ERROR', lastUsedAt: new Date() } });
     return result;
   }
 
   async toggleStatus(id: string, organizationId: string) {
-    const account = await this.prisma.pCloudAccount.findFirst({
-      where: { id, organizationId },
-    });
+    const account = await this.prisma.pCloudAccount.findFirst({ where: { id, organizationId } });
     if (!account) throw new NotFoundException(`pCloud Account ${id} not found`);
-
     const newStatus = account.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
-    const updated = await this.prisma.pCloudAccount.update({
-      where: { id },
-      data: { status: newStatus },
-    });
-
+    const updated = await this.prisma.pCloudAccount.update({ where: { id }, data: { status: newStatus } });
     return this.sanitizeAccount(updated);
   }
 
   async remove(id: string, organizationId: string) {
-    const account = await this.prisma.pCloudAccount.findFirst({
-      where: { id, organizationId },
-    });
+    const account = await this.prisma.pCloudAccount.findFirst({ where: { id, organizationId } });
     if (!account) throw new NotFoundException(`pCloud Account ${id} not found`);
-
-    await this.prisma.pCloudAccount.delete({
-      where: { id },
-    });
-
+    await this.prisma.pCloudAccount.delete({ where: { id } });
     return { success: true, message: `Account ${id} removed successfully` };
   }
 }
