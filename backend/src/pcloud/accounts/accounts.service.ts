@@ -7,11 +7,6 @@ export interface CreatePCloudAccountDto {
   name: string;
   accountEmail: string;
   provider?: 'pcloud' | 'mock_pcloud';
-  /**
-   * For the real provider this may be an existing OAuth/access token OR the
-   * account password. Passwords are used only for the one-time pCloud login
-   * exchange below and are never stored; the returned auth token is encrypted.
-   */
   accessToken?: string;
   dailyLimit?: number;
   folderId?: string;
@@ -35,10 +30,6 @@ export class PCloudAccountsService {
 
   private async loginWithPassword(username: string, password: string): Promise<PCloudLoginResult> {
     if (!username || !password) throw new BadRequestException('pCloud email and password are required');
-
-    // pCloud uses two API data centers. Try the default first and fall back to
-    // the European endpoint. Credentials are sent only over HTTPS and are never
-    // persisted or included in logs.
     const hosts = ['https://api.pcloud.com', 'https://eapi.pcloud.com'];
     let lastMessage = 'pCloud authentication failed';
 
@@ -52,23 +43,15 @@ export class PCloudAccountsService {
         authinactiveexpire: '2678400',
         device: 'AutoWork',
       });
-
       try {
         const response = await fetch(`${apiHost}/userinfo?${params.toString()}`);
         const data = await response.json();
-        if (data.result === 0 && data.auth) {
-          return {
-            token: String(data.auth),
-            userInfo: data,
-            apiHost,
-          };
-        }
+        if (data.result === 0 && data.auth) return { token: String(data.auth), userInfo: data, apiHost };
         lastMessage = data.error || `pCloud authentication failed (${data.result})`;
       } catch (error: any) {
         lastMessage = error?.message || lastMessage;
       }
     }
-
     throw new BadRequestException(lastMessage);
   }
 
@@ -98,18 +81,7 @@ export class PCloudAccountsService {
       const adapter = PCloudAdapterFactory.getAdapter(provider);
       const verifyResult = await adapter.verifyConnection(credential);
       const account = await this.prisma.pCloudAccount.create({
-        data: {
-          organizationId,
-          name: dto.name,
-          accountEmail: dto.accountEmail,
-          provider,
-          status: verifyResult.connected ? 'ACTIVE' : 'ERROR',
-          dailyLimit: dto.dailyLimit || 500,
-          sentToday: 0,
-          folderId: dto.folderId || '0',
-          credentials: credential,
-          pcloudUserId: verifyResult.userInfo?.userId || undefined,
-        },
+        data: { organizationId, name: dto.name, accountEmail: dto.accountEmail, provider, status: verifyResult.connected ? 'ACTIVE' : 'ERROR', dailyLimit: dto.dailyLimit || 500, sentToday: 0, folderId: dto.folderId || '0', credentials: credential, pcloudUserId: verifyResult.userInfo?.userId || undefined },
       });
       return this.sanitizeAccount(account);
     }
@@ -121,9 +93,6 @@ export class PCloudAccountsService {
     let verifyResult = await adapter.verifyConnection(rawCredential);
     let apiHost = 'https://api.pcloud.com';
 
-    // If the supplied secret is not already a token, treat it as the account
-    // password, exchange it for a long-lived pCloud auth token, and discard
-    // the password immediately. The token—not the password—is stored.
     if (!verifyResult.connected) {
       const login = await this.loginWithPassword(dto.accountEmail, rawCredential);
       credentialForStorage = login.token;
@@ -133,29 +102,8 @@ export class PCloudAccountsService {
 
     const credentials = encryptPCloudCredential(credentialForStorage);
     const account = await this.prisma.pCloudAccount.create({
-      data: {
-        organizationId,
-        name: dto.name,
-        accountEmail: dto.accountEmail,
-        provider,
-        status: verifyResult.connected ? 'ACTIVE' : 'ERROR',
-        dailyLimit: dto.dailyLimit || 500,
-        sentToday: 0,
-        folderId: dto.folderId || '0',
-        credentials,
-        pcloudUserId: verifyResult.userInfo?.userId || undefined,
-      },
+      data: { organizationId, name: dto.name, accountEmail: dto.accountEmail, provider, status: verifyResult.connected ? 'ACTIVE' : 'ERROR', dailyLimit: dto.dailyLimit || 500, sentToday: 0, folderId: dto.folderId || '0', credentials, pcloudUserId: verifyResult.userInfo?.userId || undefined, apiHost },
     });
-
-    // Persist the data-center API host in the metadata column without storing
-    // any credential material. This keeps US/EU accounts routed correctly.
-    if (apiHost !== 'https://api.pcloud.com') {
-      await this.prisma.pCloudAccount.update({
-        where: { id: account.id },
-        data: { folderId: dto.folderId || '0' },
-      });
-    }
-
     return this.sanitizeAccount(account);
   }
 
@@ -164,7 +112,7 @@ export class PCloudAccountsService {
     if (!account) throw new NotFoundException(`pCloud Account ${id} not found`);
     const credential = account.provider === 'mock_pcloud' ? account.credentials : decryptPCloudCredential(account.credentials);
     const adapter = PCloudAdapterFactory.getAdapter(account.provider);
-    const result = await adapter.verifyConnection(credential);
+    const result = await adapter.verifyConnection(credential, account.apiHost || undefined);
     await this.prisma.pCloudAccount.update({ where: { id }, data: { status: result.connected ? 'ACTIVE' : 'ERROR', lastUsedAt: new Date() } });
     return result;
   }
