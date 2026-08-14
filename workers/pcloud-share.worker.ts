@@ -1,11 +1,15 @@
 import { Worker, Job } from 'bullmq';
+import { PrismaClient } from '../backend/node_modules/.prisma/client';
 import { PCloudAdapterFactory } from '../backend/src/pcloud/pcloud.factory';
 import { TemplateVariableResolver } from '../backend/src/templates/template-variable.resolver';
-import { PCloudErrorCode } from '../backend/src/pcloud/pcloud.interface';
+import { decryptPCloudCredential } from '../backend/src/pcloud/pcloud-credentials';
+
+const prisma = new PrismaClient();
 
 export interface PCloudShareJobData {
   campaignId: string;
   recipientId: string;
+  organizationId: string;
   recipientEmail: string;
   contactData?: {
     firstName?: string;
@@ -17,8 +21,6 @@ export interface PCloudShareJobData {
   };
   pcloudAccountId: string;
   pcloudProvider: string;
-  pcloudCredentials: string;
-  pcloudFolderId?: string;
   pcloudFileId: string;
   templateContent: string;
   operationType?: 'sharefolder' | 'uploadtransfer';
@@ -29,64 +31,112 @@ export function createPCloudShareWorker(redisConnection: { host: string; port: n
     'pcloud-share-queue',
     async (job: Job<PCloudShareJobData>) => {
       const data = job.data;
-      console.log(`[pCloud Worker] Processing share for recipient ${data.recipientEmail} (Campaign: ${data.campaignId})`);
+      const recipient = await prisma.campaignRecipient.findFirst({
+        where: { id: data.recipientId, campaignId: data.campaignId },
+      });
+      const campaign = await prisma.campaign.findFirst({
+        where: { id: data.campaignId, organizationId: data.organizationId },
+        include: { pcloudAccount: true, pcloudFile: true },
+      });
 
-      // Resolve variables with #RANDOM# code
-      const { resolvedText, randomCode } = TemplateVariableResolver.resolve(
-        data.templateContent,
-        {
-          email: data.recipientEmail,
-          ...data.contactData,
-        }
-      );
+      if (!recipient || !campaign) throw new Error('Campaign recipient or campaign not found');
+      if (campaign.status === 'PAUSED') return { success: false, skipped: true };
 
-      const adapter = PCloudAdapterFactory.getAdapter(data.pcloudProvider || 'mock_pcloud');
+      await prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'PROCESSING' } });
 
-      // Execute share/transfer operation
-      const result = await adapter.shareFolder(
-        {
-          folderId: data.pcloudFolderId || '0',
-          fileId: data.pcloudFileId,
-          recipientEmail: data.recipientEmail,
-          message: resolvedText,
-          pcloudAccountId: data.pcloudAccountId,
-          campaignId: data.campaignId,
-          jobId: job.id,
-        },
-        data.pcloudCredentials
-      );
+      const account = campaign.pcloudAccount;
+      const credential = account.provider === 'mock_pcloud' ? account.credentials : decryptPCloudCredential(account.credentials);
+      const adapter = PCloudAdapterFactory.getAdapter(account.provider);
+      const contact = await prisma.contact.findUnique({ where: { id: recipient.contactId } });
+      const { resolvedText, randomCode } = TemplateVariableResolver.resolve(data.templateContent, {
+        email: recipient.recipientEmail,
+        firstName: contact?.firstName,
+        lastName: contact?.lastName,
+        fullName: contact?.fullName,
+        company: contact?.company,
+        phone: contact?.phone,
+        target: contact?.target,
+      });
 
-      if (!result.success && result.error) {
-        // If error is transient (e.g. rate limit, network 500), throw to trigger BullMQ bounded retry
-        if (result.error.isTransient && job.attemptsMade < (job.opts.attempts || 3)) {
-          console.warn(`[pCloud Worker] Transient error for ${data.recipientEmail}: ${result.error.message}. Retrying...`);
-          throw new Error(result.error.message);
-        }
+      const result = data.operationType === 'sharefolder'
+        ? await adapter.shareFolder({
+            folderId: campaign.pcloudFile.folderId || '0',
+            fileId: campaign.pcloudFile.fileId,
+            recipientEmail: recipient.recipientEmail,
+            message: resolvedText,
+            pcloudAccountId: account.id,
+            organizationId: campaign.organizationId,
+            campaignId: campaign.id,
+            jobId: job.id,
+          }, credential)
+        : await adapter.createTransfer({
+            fileId: campaign.pcloudFile.fileId,
+            filename: campaign.pcloudFile.name,
+            mimeType: campaign.pcloudFile.mimeType,
+            senderEmail: account.accountEmail,
+            recipientEmails: [recipient.recipientEmail],
+            message: resolvedText,
+            pcloudAccountId: account.id,
+            organizationId: campaign.organizationId,
+            campaignId: campaign.id,
+            jobId: job.id,
+          }, credential);
+
+      if (!result.success && result.error?.isTransient && job.attemptsMade < (job.opts.attempts || 3)) {
+        await prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'RETRYING', errorCode: result.error.code, errorMessage: result.error.message } });
+        throw new Error(result.error.message);
       }
 
-      return {
-        success: result.success,
-        referenceId: result.pcloudReferenceId,
-        recipientEmail: data.recipientEmail,
-        randomCode,
-        resolvedDescription: resolvedText,
-        error: result.error,
-        timestamp: new Date().toISOString(),
-      };
+      const execution = await prisma.pCloudShareExecution.create({
+        data: {
+          organizationId: campaign.organizationId,
+          campaignId: campaign.id,
+          recipientId: recipient.id,
+          pcloudAccountId: account.id,
+          pcloudFileId: campaign.pcloudFile.id,
+          recipientEmail: recipient.recipientEmail,
+          descriptionSnapshot: resolvedText,
+          operationType: result.operationType,
+          status: result.success ? 'SUCCESS' : 'FAILED',
+          pcloudReferenceId: result.pcloudReferenceId || null,
+          errorCode: result.error?.code || null,
+          errorMessage: result.error?.message || null,
+          startedAt: new Date(result.timestamp),
+          completedAt: new Date(),
+        },
+      });
+
+      await prisma.campaignRecipient.update({
+        where: { id: recipient.id },
+        data: {
+          status: result.success ? 'SHARED' : 'FAILED',
+          pcloudShareExecutionId: execution.id,
+          resolvedDescription: resolvedText,
+          randomCode,
+          errorCode: result.error?.code || null,
+          errorMessage: result.error?.message || null,
+        },
+      });
+
+      if (result.success) {
+        await prisma.campaign.update({ where: { id: campaign.id }, data: { sharedCount: { increment: 1 } } });
+        await prisma.pCloudAccount.update({ where: { id: account.id }, data: { sentToday: { increment: 1 }, lastUsedAt: new Date() } });
+      } else {
+        await prisma.campaign.update({ where: { id: campaign.id }, data: { failedCount: { increment: 1 } } });
+      }
+
+      const latest = await prisma.campaign.findUnique({ where: { id: campaign.id }, select: { totalCount: true, sharedCount: true, failedCount: true, status: true } });
+      if (latest && latest.sharedCount + latest.failedCount >= latest.totalCount && latest.totalCount > 0) {
+        await prisma.campaign.update({ where: { id: campaign.id }, data: { status: 'COMPLETED' } });
+      }
+
+      return { success: result.success, referenceId: result.pcloudReferenceId, recipientEmail: recipient.recipientEmail, randomCode, resolvedDescription: resolvedText, error: result.error };
     },
-    {
-      connection: redisConnection,
-      concurrency: 5,
-    }
+    { connection: redisConnection, concurrency: 5 }
   );
 
-  worker.on('completed', (job) => {
-    console.log(`[pCloud Worker] Job ${job.id} completed successfully for recipient ${job.data.recipientEmail}`);
-  });
-
-  worker.on('failed', (job, err) => {
-    console.error(`[pCloud Worker] Job ${job?.id} failed: ${err.message}`);
-  });
+  worker.on('completed', (job) => console.log(`[pCloud Worker] Job ${job.id} completed for recipient ${job.data.recipientEmail}`));
+  worker.on('failed', (job, err) => console.error(`[pCloud Worker] Job ${job?.id} failed: ${err.message}`));
 
   return worker;
 }
