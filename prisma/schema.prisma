@@ -6,8 +6,8 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client-js"
-  output   = "../backend/node_modules/.prisma/client"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl"]
 }
 
 model Organization {
@@ -265,14 +265,14 @@ model AutomationVersion {
 }
 
 model AutomationJob {
-  id             String       @id @default(uuid())
+  id             String              @id @default(uuid())
   organizationId String
-  automationId  String
-  status         String       @default("QUEUED")
-  automation     Automation   @relation(fields: [automationId], references: [id], onDelete: Cascade)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  automationId   String
+  status         String              @default("QUEUED")
+  automation     Automation          @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
   @@index([organizationId])
 }
 
