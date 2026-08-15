@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, HttpException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import Redis from 'ioredis';
 import { ConfigService } from '../config/config.service';
 
@@ -32,15 +32,11 @@ export class AuthRateLimitGuard implements CanActivate {
       const count = await this.redis.incr(key);
       if (count === 1) await this.redis.expire(key, this.windowSeconds);
       if (count > bucket) {
-        // NestJS 10.4.x does not export a dedicated TooManyRequestsException.
-        // Return the standard HttpException directly so the status remains 429.
-        const error = new Error('Too many authentication attempts. Please try again later.') as Error & { status?: number };
-        error.status = 429;
-        throw error;
+        throw new HttpException('Too many authentication attempts. Please try again later.', 429);
       }
       return true;
-    } catch (error: any) {
-      if (error?.status === 429) throw error;
+    } catch (error) {
+      if (error instanceof HttpException && error.getStatus() === 429) throw error;
       throw new ServiceUnavailableException('Authentication rate-limit service is unavailable');
     }
   }
