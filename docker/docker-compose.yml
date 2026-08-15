@@ -20,15 +20,15 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4000
-      - DATABASE_URL=${DATABASE_URL:-postgresql://autowork:autoworkpass@postgres:5432/autowork_db?schema=public}
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - JWT_SECRET=${JWT_SECRET:-}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - PCLOUD_DEFAULT_PROVIDER=${PCLOUD_DEFAULT_PROVIDER:-pcloud}
       - PCLOUD_ALLOW_MOCK=${PCLOUD_ALLOW_MOCK:-false}
       - PCLOUD_API_HOST=${PCLOUD_API_HOST:-https://api.pcloud.com}
       - PCLOUD_API_URL=${PCLOUD_API_URL:-https://api.pcloud.com}
-      - PCLOUD_CREDENTIAL_ENCRYPTION_KEY=${PCLOUD_CREDENTIAL_ENCRYPTION_KEY:-}
+      - PCLOUD_CREDENTIAL_ENCRYPTION_KEY=${PCLOUD_CREDENTIAL_ENCRYPTION_KEY:?PCLOUD_CREDENTIAL_ENCRYPTION_KEY is required}
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,14 +47,14 @@ services:
       dockerfile: docker/Dockerfile.worker
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL:-postgresql://autowork:autoworkpass@postgres:5432/autowork_db?schema=public}
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - PCLOUD_DEFAULT_PROVIDER=${PCLOUD_DEFAULT_PROVIDER:-pcloud}
       - PCLOUD_ALLOW_MOCK=${PCLOUD_ALLOW_MOCK:-false}
       - PCLOUD_API_HOST=${PCLOUD_API_HOST:-https://api.pcloud.com}
       - PCLOUD_API_URL=${PCLOUD_API_URL:-https://api.pcloud.com}
-      - PCLOUD_CREDENTIAL_ENCRYPTION_KEY=${PCLOUD_CREDENTIAL_ENCRYPTION_KEY:-}
+      - PCLOUD_CREDENTIAL_ENCRYPTION_KEY=${PCLOUD_CREDENTIAL_ENCRYPTION_KEY:?PCLOUD_CREDENTIAL_ENCRYPTION_KEY is required}
     command: ["npx", "ts-node", "--transpile-only", "../workers/campaign.worker.entry.ts"]
     depends_on:
       postgres:
@@ -70,14 +70,15 @@ services:
       dockerfile: docker/Dockerfile.worker
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL:-postgresql://autowork:autoworkpass@postgres:5432/autowork_db?schema=public}
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - PCLOUD_DEFAULT_PROVIDER=${PCLOUD_DEFAULT_PROVIDER:-pcloud}
       - PCLOUD_ALLOW_MOCK=${PCLOUD_ALLOW_MOCK:-false}
       - PCLOUD_API_HOST=${PCLOUD_API_HOST:-https://api.pcloud.com}
       - PCLOUD_API_URL=${PCLOUD_API_URL:-https://api.pcloud.com}
-      - PCLOUD_CREDENTIAL_ENCRYPTION_KEY=${PCLOUD_CREDENTIAL_ENCRYPTION_KEY:-}
+      - PCLOUD_CREDENTIAL_ENCRYPTION_KEY=${PCLOUD_CREDENTIAL_ENCRYPTION_KEY:?PCLOUD_CREDENTIAL_ENCRYPTION_KEY is required}
+    command: ["npx", "ts-node", "--transpile-only", "../workers/pcloud-share.worker.entry.ts"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,7 +91,7 @@ services:
     image: postgres:15-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-autowork}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-autoworkpass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-autowork_db}
     ports:
       - "5432:5432"
