@@ -3,8 +3,11 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { validateEnvironment } from './config/validate-environment';
 
 async function bootstrap() {
+  validateEnvironment();
+
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
@@ -37,4 +40,7 @@ async function bootstrap() {
   console.log(`📚 Swagger OpenAPI documentation available at http://localhost:${port}/api/docs`);
   console.log(`🩺 Health check available at http://localhost:${port}/api/health`);
 }
-bootstrap();
+bootstrap().catch((error) => {
+  console.error('❌ Autowork backend failed to start:', error instanceof Error ? error.message : error);
+  process.exit(1);
+});
