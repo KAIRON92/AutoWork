@@ -8,9 +8,16 @@ import {
   Query,
   Body,
   Request,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ContactsService, CreateContactDto } from './contacts.service';
+
+function currentOrgId(req: any): string {
+  const orgId = req.user?.orgId;
+  if (!orgId) throw new UnauthorizedException('Organization context is missing');
+  return orgId;
+}
 
 @ApiTags('Contacts & Lists')
 @ApiBearerAuth()
@@ -21,64 +28,54 @@ export class ContactsController {
   @Get('contacts')
   @ApiOperation({ summary: 'List all contacts with search and list memberships' })
   async findAllContacts(@Query('search') search: string, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.contactsService.findAllContacts(orgId, search);
+    return this.contactsService.findAllContacts(currentOrgId(req), search);
   }
 
   @Get('contacts/:id')
   @ApiOperation({ summary: 'Get single contact details' })
   async findOneContact(@Param('id') id: string, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.contactsService.findOneContact(id, orgId);
+    return this.contactsService.findOneContact(id, currentOrgId(req));
   }
 
   @Post('contacts')
   @ApiOperation({ summary: 'Create a new contact' })
   async createContact(@Body() dto: CreateContactDto, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.contactsService.createContact(orgId, dto);
+    return this.contactsService.createContact(currentOrgId(req), dto);
   }
 
   @Put('contacts/:id')
   @ApiOperation({ summary: 'Update contact details' })
   async updateContact(@Param('id') id: string, @Body() dto: Partial<CreateContactDto>, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.contactsService.updateContact(id, orgId, dto);
+    return this.contactsService.updateContact(id, currentOrgId(req), dto);
   }
 
   @Delete('contacts/:id')
   @ApiOperation({ summary: 'Delete contact' })
   async removeContact(@Param('id') id: string, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.contactsService.removeContact(id, orgId);
+    return this.contactsService.removeContact(id, currentOrgId(req));
   }
 
-  // Lists
   @Get('contact-lists')
   @ApiOperation({ summary: 'List all contact lists' })
   async findAllLists(@Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.contactsService.findAllLists(orgId);
+    return this.contactsService.findAllLists(currentOrgId(req));
   }
 
   @Get('contact-lists/:id')
   @ApiOperation({ summary: 'Get contact list and its members' })
   async findOneList(@Param('id') id: string, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.contactsService.findOneList(id, orgId);
+    return this.contactsService.findOneList(id, currentOrgId(req));
   }
 
   @Post('contact-lists')
   @ApiOperation({ summary: 'Create a new contact list' })
   async createList(@Body() body: { name: string; description?: string }, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.contactsService.createList(orgId, body.name, body.description);
+    return this.contactsService.createList(currentOrgId(req), body.name, body.description);
   }
 
   @Delete('contact-lists/:id')
   @ApiOperation({ summary: 'Delete a contact list' })
   async removeList(@Param('id') id: string, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.contactsService.removeList(id, orgId);
+    return this.contactsService.removeList(id, currentOrgId(req));
   }
 }
