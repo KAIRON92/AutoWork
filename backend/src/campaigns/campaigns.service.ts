@@ -63,8 +63,13 @@ export class CampaignsService {
 
     let contactIds: { id: string; email: string }[] = [];
     if (dto.contactListId) {
+      const contactList = await this.prisma.contactList.findFirst({
+        where: { id: dto.contactListId, organizationId },
+      });
+      if (!contactList) throw new BadRequestException(`Invalid contact list ${dto.contactListId}`);
+
       const members = await this.prisma.contactListMember.findMany({
-        where: { contactListId: dto.contactListId },
+        where: { contactListId: contactList.id, contactList: { organizationId } },
         include: { contact: { select: { id: true, email: true } } },
       });
       contactIds = members.map((m) => m.contact);
@@ -116,6 +121,9 @@ export class CampaignsService {
       include: { pcloudAccount: true, pcloudFile: true, template: true, recipients: true },
     });
     if (!campaign) throw new NotFoundException(`Campaign ${id} not found`);
+    if (!['DRAFT', 'PAUSED'].includes(campaign.status)) {
+      throw new BadRequestException(`Campaign cannot be launched from ${campaign.status} state`);
+    }
     if (campaign.recipients.length === 0) throw new BadRequestException('Cannot launch campaign with 0 recipients');
     if (campaign.pcloudAccount.status !== 'ACTIVE') throw new BadRequestException('Selected pCloud account is not active');
 
@@ -124,18 +132,23 @@ export class CampaignsService {
       throw new BadRequestException(`Unsupported pCloud operation: ${config.shareType}`);
     }
 
-    await this.prisma.campaign.update({ where: { id }, data: { status: 'QUEUED' } });
-    await this.prisma.campaignRecipient.updateMany({ where: { campaignId: id, status: 'PENDING' }, data: { status: 'QUEUED' } });
+    try {
+      await this.jobsService.enqueueCampaignJob({
+        campaignId: campaign.id,
+        organizationId,
+        pcloudAccountId: campaign.pcloudAccountId,
+        pcloudFileId: campaign.pcloudFileId,
+        templateId: campaign.templateId,
+        operationType: config.shareType,
+        retryCount: config.retryCount || 3,
+      });
 
-    await this.jobsService.enqueueCampaignJob({
-      campaignId: campaign.id,
-      organizationId,
-      pcloudAccountId: campaign.pcloudAccountId,
-      pcloudFileId: campaign.pcloudFileId,
-      templateId: campaign.templateId,
-      operationType: config.shareType,
-      retryCount: config.retryCount || 3,
-    });
+      await this.prisma.campaign.update({ where: { id }, data: { status: 'QUEUED' } });
+      await this.prisma.campaignRecipient.updateMany({ where: { campaignId: id, status: 'PENDING' }, data: { status: 'QUEUED' } });
+    } catch (error: any) {
+      await this.prisma.campaign.update({ where: { id }, data: { status: campaign.status } });
+      throw new BadRequestException(error?.message || 'Unable to queue campaign');
+    }
 
     return {
       message: 'Campaign queued for pCloud processing',
