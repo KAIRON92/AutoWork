@@ -37,10 +37,11 @@ export class JwtAuthGuard implements CanActivate {
 
     if (!token) throw new UnauthorizedException('Authentication required');
 
+    const secret = process.env.JWT_SECRET;
+    if (!secret) throw new UnauthorizedException('Authentication is not configured');
+
     try {
-      const payload = this.jwtService.verify(token, {
-        secret: process.env.JWT_SECRET || 'super-secret-jwt-token-key-autowork-2026',
-      });
+      const payload = this.jwtService.verify(token, { secret });
       if (!payload?.sub || !payload?.orgId) throw new UnauthorizedException('Invalid authentication token');
       request.user = payload;
       return true;
