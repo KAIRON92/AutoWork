@@ -1,5 +1,6 @@
-import { BadRequestException, Controller, Delete, Get, Param, Post, Query, Req } from '@nestjs/common';
+import { BadRequestException, Controller, Delete, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 import { Roles } from '../auth/roles.decorator';
 import { EmailService } from './email.service';
 
@@ -31,9 +32,17 @@ export class EmailController {
   }
 
   @Get('gmail/callback')
-  @ApiOperation({ summary: 'Complete the Gmail OAuth callback and verify the mailbox' })
-  async gmailCallback(@Query('code') code: string, @Query('state') state: string) {
-    return this.emailService.gmailCallback(code, state);
+  @ApiOperation({ summary: 'Complete Gmail OAuth and return to the Email Accounts screen' })
+  async gmailCallback(@Query('code') code: string, @Query('state') state: string, @Res() res: Response) {
+    try {
+      await this.emailService.gmailCallback(code, state);
+      const frontend = process.env.FRONTEND_URL || 'http://localhost:3000';
+      return res.redirect(`${frontend}/email-accounts?connected=gmail`);
+    } catch (error: any) {
+      const frontend = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const message = encodeURIComponent(error?.message || 'Gmail connection failed');
+      return res.redirect(`${frontend}/email-accounts?error=${message}`);
+    }
   }
 
   @Post(':id/test')
