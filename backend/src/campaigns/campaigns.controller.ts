@@ -6,9 +6,16 @@ import {
   Param,
   Body,
   Request,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CampaignsService, CreateCampaignDto } from './campaigns.service';
+
+function currentOrgId(req: any): string {
+  const orgId = req.user?.orgId;
+  if (!orgId) throw new UnauthorizedException('Organization context is missing');
+  return orgId;
+}
 
 @ApiTags('Campaigns')
 @ApiBearerAuth()
@@ -19,42 +26,36 @@ export class CampaignsController {
   @Get()
   @ApiOperation({ summary: 'List all pCloud share campaigns for current tenant' })
   async findAll(@Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.campaignsService.findAll(orgId);
+    return this.campaignsService.findAll(currentOrgId(req));
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get campaign details, recipient progress, and execution logs' })
   async findOne(@Param('id') id: string, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.campaignsService.findOne(id, orgId);
+    return this.campaignsService.findOne(id, currentOrgId(req));
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create a new 8-step configured pCloud share campaign' })
+  @ApiOperation({ summary: 'Create a new configured pCloud share campaign' })
   async create(@Body() dto: CreateCampaignDto, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.campaignsService.create(orgId, dto);
+    return this.campaignsService.create(currentOrgId(req), dto);
   }
 
   @Post(':id/launch')
   @ApiOperation({ summary: 'Launch campaign and begin pCloud share/transfer execution' })
   async launch(@Param('id') id: string, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.campaignsService.launch(id, orgId);
+    return this.campaignsService.launch(id, currentOrgId(req));
   }
 
   @Post(':id/pause')
   @ApiOperation({ summary: 'Pause campaign execution' })
   async pause(@Param('id') id: string, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.campaignsService.pause(id, orgId);
+    return this.campaignsService.pause(id, currentOrgId(req));
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a campaign' })
   async remove(@Param('id') id: string, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.campaignsService.remove(id, orgId);
+    return this.campaignsService.remove(id, currentOrgId(req));
   }
 }
