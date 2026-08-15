@@ -1,8 +1,10 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Roles } from '../auth/roles.decorator';
 
 @ApiTags('Admin System Console')
 @Controller('admin')
+@Roles('ADMIN')
 export class AdminController {
   @Get('health')
   @ApiOperation({ summary: 'Get infrastructure & worker queue health status' })
