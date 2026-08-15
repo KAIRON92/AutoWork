@@ -42,28 +42,15 @@ export class UsersController {
 
   @Post()
   @Roles('ADMIN')
-  async create(
-    @Req() req: any,
-    @Body() body: { email: string; firstName: string; lastName: string; roleId?: string; password?: string },
-  ) {
+  async create(@Req() req: any, @Body() body: { email: string; firstName: string; lastName: string; roleId?: string; password?: string }) {
     const password = body.password?.trim();
     if (!password) throw new BadRequestException('password is required when creating a user');
-    return this.usersService.create(currentOrgId(req), {
-      email: body.email,
-      firstName: body.firstName,
-      lastName: body.lastName,
-      roleId: body.roleId,
-      password,
-    });
+    return this.usersService.create(currentOrgId(req), { ...body, password });
   }
 
   @Patch(':id')
   @Roles('ADMIN')
-  async update(
-    @Param('id') id: string,
-    @Req() req: any,
-    @Body() body: { firstName?: string; lastName?: string; email?: string; roleId?: string },
-  ) {
+  async update(@Param('id') id: string, @Req() req: any, @Body() body: { firstName?: string; lastName?: string; email?: string; roleId?: string }) {
     return this.usersService.update(id, currentOrgId(req), body);
   }
 
