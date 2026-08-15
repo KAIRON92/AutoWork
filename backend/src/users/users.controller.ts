@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Req, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Req, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { UsersService } from './users.service';
 
 function currentUserId(req: any): string {
@@ -38,8 +38,10 @@ export class UsersController {
   }
 
   @Post()
-  async create(@Req() req: any, @Body() body: { email: string; firstName: string; lastName: string; roleId?: string }) {
-    return this.usersService.create(currentOrgId(req), body);
+  async create(@Req() req: any, @Body() body: { email: string; firstName: string; lastName: string; roleId?: string; passwordHash?: string }) {
+    const passwordHash = body.passwordHash?.trim();
+    if (!passwordHash) throw new BadRequestException('passwordHash is required when creating a user');
+    return this.usersService.create(currentOrgId(req), { ...body, passwordHash });
   }
 
   @Patch(':id')
