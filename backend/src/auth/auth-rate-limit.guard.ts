@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, ServiceUnavailableException, TooManyRequestsException, UnauthorizedException } from '@nestjs/common';
 import Redis from 'ioredis';
 import { ConfigService } from '../config/config.service';
 
@@ -30,9 +30,10 @@ export class AuthRateLimitGuard implements CanActivate {
       if (this.redis.status !== 'ready') await this.redis.connect();
       const count = await this.redis.incr(key);
       if (count === 1) await this.redis.expire(key, this.windowSeconds);
-      if (count > bucket) return false;
+      if (count > bucket) throw new TooManyRequestsException('Too many authentication attempts. Please try again later.');
       return true;
-    } catch {
+    } catch (error) {
+      if (error instanceof TooManyRequestsException || error instanceof UnauthorizedException) throw error;
       throw new ServiceUnavailableException('Authentication rate-limit service is unavailable');
     }
   }
