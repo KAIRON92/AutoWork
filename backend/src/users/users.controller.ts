@@ -1,5 +1,17 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Req, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from './users.service';
+
+function currentUserId(req: any): string {
+  const userId = req.user?.sub;
+  if (!userId) throw new UnauthorizedException('User context is missing');
+  return userId;
+}
+
+function currentOrgId(req: any): string {
+  const orgId = req.user?.orgId;
+  if (!orgId) throw new UnauthorizedException('Organization context is missing');
+  return orgId;
+}
 
 @Controller('api/v1/users')
 export class UsersController {
@@ -7,43 +19,36 @@ export class UsersController {
 
   @Get('me')
   async getProfile(@Req() req: any) {
-    const userId = req.user?.sub || 'usr-1';
-    return this.usersService.getProfile(userId);
+    return this.usersService.getProfile(currentUserId(req));
   }
 
   @Patch('me')
   async updateProfile(@Req() req: any, @Body() body: { firstName?: string; lastName?: string; email?: string }) {
-    const userId = req.user?.sub || 'usr-1';
-    return this.usersService.updateProfile(userId, body);
+    return this.usersService.updateProfile(currentUserId(req), body);
   }
 
   @Get()
   async findAll(@Req() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return this.usersService.findAllByOrg(orgId);
+    return this.usersService.findAllByOrg(currentOrgId(req));
   }
 
   @Get(':id')
   async findOne(@Param('id') id: string, @Req() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return this.usersService.findOne(id, orgId);
+    return this.usersService.findOne(id, currentOrgId(req));
   }
 
   @Post()
   async create(@Req() req: any, @Body() body: { email: string; firstName: string; lastName: string; roleId?: string }) {
-    const orgId = req.user?.orgId || 'org-101';
-    return this.usersService.create(orgId, body);
+    return this.usersService.create(currentOrgId(req), body);
   }
 
   @Patch(':id')
   async update(@Param('id') id: string, @Req() req: any, @Body() body: { firstName?: string; lastName?: string; email?: string; roleId?: string }) {
-    const orgId = req.user?.orgId || 'org-101';
-    return this.usersService.update(id, orgId, body);
+    return this.usersService.update(id, currentOrgId(req), body);
   }
 
   @Delete(':id')
   async remove(@Param('id') id: string, @Req() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return this.usersService.remove(id, orgId);
+    return this.usersService.remove(id, currentOrgId(req));
   }
 }
