@@ -9,6 +9,7 @@ import { RolesGuard } from './auth/roles.guard';
 import { UsersModule } from './users/users.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { PCloudModule } from './pcloud/pcloud.module';
+import { EmailModule } from './email/email.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { ImportsModule } from './imports/imports.module';
 import { TemplatesModule } from './templates/templates.module';
@@ -27,6 +28,7 @@ import { AdminModule } from './admin/admin.module';
     UsersModule,
     OrganizationsModule,
     PCloudModule,
+    EmailModule,
     ContactsModule,
     ImportsModule,
     TemplatesModule,
