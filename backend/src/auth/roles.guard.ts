@@ -20,15 +20,15 @@ export class RolesGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    const role = request.user?.role as AppRole | undefined;
 
+    // Routes without an explicit @Roles decorator remain protected by the JWT
+    // guard, but are not denied solely because the endpoint is a public/auth
+    // route or a read-only endpoint. Explicit role metadata always wins.
+    if (!allowed || allowed.length === 0) return true;
+
+    const role = request.user?.role as AppRole | undefined;
     if (!role || !(role in ROLE_RANK)) {
       throw new ForbiddenException('A valid application role is required');
-    }
-
-    if (!allowed || allowed.length === 0) {
-      if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return true;
-      return ROLE_RANK[role] >= ROLE_RANK.MEMBER;
     }
 
     if (allowed.includes(role)) return true;
