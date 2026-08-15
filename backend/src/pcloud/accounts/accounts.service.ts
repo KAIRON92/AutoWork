@@ -32,6 +32,7 @@ export class PCloudAccountsService {
     if (!username || !password) throw new BadRequestException('pCloud email and password are required');
     const hosts = ['https://api.pcloud.com', 'https://eapi.pcloud.com'];
     let lastMessage = 'pCloud authentication failed';
+    let lastResult: number | string | undefined;
 
     for (const apiHost of hosts) {
       const params = new URLSearchParams({
@@ -44,13 +45,26 @@ export class PCloudAccountsService {
         device: 'AutoWork',
       });
       try {
-        const response = await fetch(`${apiHost}/userinfo?${params.toString()}`);
+        const response = await fetch(`${apiHost}/userinfo`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+        });
         const data = await response.json();
-        if (data.result === 0 && data.auth) return { token: String(data.auth), userInfo: data, apiHost };
+        lastResult = data.result;
+        if (data.result === 0 && data.auth) {
+          return { token: String(data.auth), userInfo: data, apiHost };
+        }
         lastMessage = data.error || `pCloud authentication failed (${data.result})`;
+        console.warn(`[pCloud Auth] ${apiHost} rejected request with result=${String(data.result)} message=${String(data.error || 'unknown error')}`);
       } catch (error: any) {
         lastMessage = error?.message || lastMessage;
+        console.warn(`[pCloud Auth] ${apiHost} request failed: ${lastMessage}`);
       }
+    }
+
+    if (lastResult !== undefined) {
+      throw new BadRequestException(`pCloud authentication failed (result ${String(lastResult)}): ${lastMessage}`);
     }
     throw new BadRequestException(lastMessage);
   }
@@ -87,6 +101,7 @@ export class PCloudAccountsService {
       throw new BadRequestException(`Unsupported pCloud provider: ${provider}`);
     }
 
+    const accountEmail = dto.accountEmail.trim().toLowerCase();
     const rawCredential = dto.accessToken?.trim();
 
     if (provider === 'mock_pcloud') {
@@ -97,7 +112,7 @@ export class PCloudAccountsService {
         data: {
           organizationId,
           name: dto.name,
-          accountEmail: dto.accountEmail,
+          accountEmail,
           provider,
           status: verifyResult.connected ? 'ACTIVE' : 'ERROR',
           dailyLimit: dto.dailyLimit || 500,
@@ -119,7 +134,7 @@ export class PCloudAccountsService {
     let apiHost = 'https://api.pcloud.com';
 
     if (!verifyResult.connected) {
-      const login = await this.loginWithPassword(dto.accountEmail, rawCredential);
+      const login = await this.loginWithPassword(accountEmail, rawCredential);
       credentialForStorage = login.token;
       apiHost = login.apiHost;
       verifyResult = await adapter.verifyConnection(login.token, apiHost);
@@ -132,7 +147,7 @@ export class PCloudAccountsService {
       data: {
         organizationId,
         name: dto.name,
-        accountEmail: dto.accountEmail,
+        accountEmail,
         provider: 'pcloud',
         status: 'ACTIVE',
         dailyLimit: dto.dailyLimit || 500,
