@@ -9,10 +9,18 @@ import {
   UseInterceptors,
   UploadedFile,
   Request,
+  UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { PCloudFilesService } from './files.service';
+
+function currentOrgId(req: any): string {
+  const orgId = req.user?.orgId;
+  if (!orgId) throw new UnauthorizedException('Organization context is missing');
+  return orgId;
+}
 
 @ApiTags('pCloud Files')
 @ApiBearerAuth()
@@ -25,24 +33,22 @@ export class PCloudFilesController {
   async browse(
     @Query('accountId') accountId: string,
     @Query('folderId') folderId: string = '0',
-    @Request() req: any
+    @Request() req: any,
   ) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.filesService.listFolder(orgId, accountId, folderId);
+    if (!accountId) throw new BadRequestException('accountId is required');
+    return this.filesService.listFolder(currentOrgId(req), accountId, folderId);
   }
 
   @Get()
   @ApiOperation({ summary: 'List all registered pCloud files for current tenant' })
   async findAll(@Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.filesService.findAllStoredFiles(orgId);
+    return this.filesService.findAllStoredFiles(currentOrgId(req));
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get single pCloud file metadata' })
   async findOne(@Param('id') id: string, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.filesService.findOneStoredFile(id, orgId);
+    return this.filesService.findOneStoredFile(id, currentOrgId(req));
   }
 
   @Post('upload')
@@ -53,32 +59,24 @@ export class PCloudFilesController {
     @UploadedFile() file: any,
     @Body('accountId') accountId: string,
     @Body('folderId') folderId: string,
-    @Request() req: any
+    @Request() req: any,
   ) {
-    const orgId = req.user?.orgId || 'org-101';
-    const fileObj = file || {
-      originalname: 'Document.pdf',
-      buffer: Buffer.from('PDF Content Placeholder'),
-      mimetype: 'application/pdf',
-      size: 1024,
-    };
-    return await this.filesService.uploadAndRegister(orgId, fileObj, accountId, folderId);
+    if (!file) throw new BadRequestException('A file is required');
+    return this.filesService.uploadAndRegister(currentOrgId(req), file, accountId, folderId);
   }
 
   @Post('register')
   @ApiOperation({ summary: 'Register an existing pCloud file reference for use in campaigns' })
   async registerExisting(
     @Body() dto: { name: string; fileId: string; folderId?: string; fileSize?: number; mimeType?: string; pcloudAccountId?: string; pcloudPath?: string },
-    @Request() req: any
+    @Request() req: any,
   ) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.filesService.registerExistingPCloudFile(orgId, dto);
+    return this.filesService.registerExistingPCloudFile(currentOrgId(req), dto);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a registered pCloud file record' })
   async remove(@Param('id') id: string, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.filesService.removeStoredFile(id, orgId);
+    return this.filesService.removeStoredFile(id, currentOrgId(req));
   }
 }
