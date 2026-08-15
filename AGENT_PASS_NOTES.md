@@ -1,0 +1,1 @@
+Isolated hardening work area. This file is temporary and must be removed before merge.
