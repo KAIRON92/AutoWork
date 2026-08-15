@@ -1,4 +1,4 @@
-import { Controller, Get, Request } from '@nestjs/common';
+import { Controller, Get, Request, UnauthorizedException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { DashboardService } from './dashboard.service';
 
@@ -11,7 +11,8 @@ export class DashboardController {
   @Get('metrics')
   @ApiOperation({ summary: 'Get aggregated dashboard metrics for contacts, pCloud accounts, files, campaigns, and jobs' })
   async getMetrics(@Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.dashboardService.getMetrics(orgId);
+    const orgId = req.user?.orgId;
+    if (!orgId) throw new UnauthorizedException('Organization context is missing');
+    return this.dashboardService.getMetrics(orgId);
   }
 }
