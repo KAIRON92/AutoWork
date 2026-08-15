@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { AuthRateLimitGuard } from './auth-rate-limit.guard';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Module({
@@ -13,7 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard, PrismaService],
-  exports: [AuthService, JwtModule, JwtAuthGuard],
+  providers: [AuthService, JwtAuthGuard, AuthRateLimitGuard, PrismaService],
+  exports: [AuthService, JwtModule, JwtAuthGuard, AuthRateLimitGuard],
 })
 export class AuthModule {}
