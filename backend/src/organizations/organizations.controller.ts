@@ -1,5 +1,6 @@
 import { Controller, Get, Patch, Body, Param, Req, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
+import { Roles } from '../auth/roles.decorator';
 
 function currentOrgId(req: any): string {
   const orgId = req.user?.orgId;
@@ -24,6 +25,7 @@ export class OrganizationsController {
   }
 
   @Patch(':id')
+  @Roles('ADMIN')
   async update(@Param('id') id: string, @Body() body: { name?: string; slug?: string }, @Req() req: any) {
     const orgId = currentOrgId(req);
     if (id !== orgId) throw new ForbiddenException('You cannot modify another organization');
