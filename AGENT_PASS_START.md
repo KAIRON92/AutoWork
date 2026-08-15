@@ -1,1 +1,0 @@
-Temporary marker for a clean, isolated hardening pass. Remove before merge.
