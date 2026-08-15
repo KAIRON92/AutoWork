@@ -12,49 +12,40 @@ export class JobsService implements OnModuleInit {
 
   constructor(private configService: ConfigService) {}
 
-  onModuleInit() {
+  async onModuleInit() {
     const connection = {
       host: this.configService.get('redisHost') || 'localhost',
       port: Number(this.configService.get('redisPort')) || 6379,
     };
 
-    try {
-      this.pcloudShareQueue = new Queue('pcloud-share-queue', { connection });
-      this.importQueue = new Queue('import-queue', { connection });
-      this.campaignQueue = new Queue('campaign-queue', { connection });
-      this.logger.log('🚀 BullMQ Queues initialized (pcloud-share-queue, import-queue, campaign-queue)');
-    } catch (err: any) {
-      this.logger.warn(`BullMQ queue initialization deferred: ${err.message}`);
-    }
+    this.pcloudShareQueue = new Queue('pcloud-share-queue', { connection });
+    this.importQueue = new Queue('import-queue', { connection });
+    this.campaignQueue = new Queue('campaign-queue', { connection });
+
+    await Promise.all([
+      this.pcloudShareQueue.waitUntilReady(),
+      this.importQueue.waitUntilReady(),
+      this.campaignQueue.waitUntilReady(),
+    ]);
+
+    this.logger.log('🚀 BullMQ queues connected to Redis (pcloud-share-queue, import-queue, campaign-queue)');
   }
 
   async enqueuePCloudShareJob(data: any) {
-    if (this.pcloudShareQueue) {
-      return await this.pcloudShareQueue.add('pcloud-share', data, {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 3000,
-        },
-      });
-    }
-    this.logger.log(`[Queue Fallback] Enqueued pCloud share for recipient ${data.recipientEmail}`);
-    return { id: `mock-job-${Date.now()}` };
+    if (!this.pcloudShareQueue) throw new Error('pCloud share queue is not initialized');
+    return this.pcloudShareQueue.add('pcloud-share', data, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 3000 },
+    });
   }
 
   async enqueueCampaignJob(data: any) {
-    if (this.campaignQueue) {
-      return await this.campaignQueue.add('process-campaign', data);
-    }
-    this.logger.log(`[Queue Fallback] Enqueued campaign job ${data.campaignId}`);
-    return { id: `mock-campaign-job-${Date.now()}` };
+    if (!this.campaignQueue) throw new Error('Campaign queue is not initialized');
+    return this.campaignQueue.add('process-campaign', data, { attempts: 1 });
   }
 
   async enqueueImportJob(data: any) {
-    if (this.importQueue) {
-      return await this.importQueue.add('process-import', data);
-    }
-    this.logger.log(`[Queue Fallback] Enqueued import job ${data.importJobId}`);
-    return { id: `mock-import-job-${Date.now()}` };
+    if (!this.importQueue) throw new Error('Import queue is not initialized');
+    return this.importQueue.add('process-import', data, { attempts: 1 });
   }
 }
