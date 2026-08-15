@@ -44,7 +44,7 @@ export class UsersController {
   @Roles('ADMIN')
   async create(@Req() req: any, @Body() body: { email: string; firstName: string; lastName: string; roleId?: string; password?: string }) {
     if (!body.password) throw new BadRequestException('password is required when creating a user');
-    return this.usersService.create(currentOrgId(req), body);
+    return this.usersService.create(currentOrgId(req), { ...body, password: body.password });
   }
 
   @Patch(':id')
