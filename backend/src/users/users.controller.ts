@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Req, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { UsersService } from './users.service';
+import { Roles } from '../auth/roles.decorator';
 
 function currentUserId(req: any): string {
   const userId = req.user?.sub;
@@ -28,16 +29,19 @@ export class UsersController {
   }
 
   @Get()
+  @Roles('ADMIN')
   async findAll(@Req() req: any) {
     return this.usersService.findAllByOrg(currentOrgId(req));
   }
 
   @Get(':id')
+  @Roles('ADMIN')
   async findOne(@Param('id') id: string, @Req() req: any) {
     return this.usersService.findOne(id, currentOrgId(req));
   }
 
   @Post()
+  @Roles('ADMIN')
   async create(@Req() req: any, @Body() body: { email: string; firstName: string; lastName: string; roleId?: string; passwordHash?: string }) {
     const passwordHash = body.passwordHash?.trim();
     if (!passwordHash) throw new BadRequestException('passwordHash is required when creating a user');
@@ -45,11 +49,13 @@ export class UsersController {
   }
 
   @Patch(':id')
+  @Roles('ADMIN')
   async update(@Param('id') id: string, @Req() req: any, @Body() body: { firstName?: string; lastName?: string; email?: string; roleId?: string }) {
     return this.usersService.update(id, currentOrgId(req), body);
   }
 
   @Delete(':id')
+  @Roles('ADMIN')
   async remove(@Param('id') id: string, @Req() req: any) {
     return this.usersService.remove(id, currentOrgId(req));
   }
