@@ -29,6 +29,12 @@ services:
       - PCLOUD_API_HOST=${PCLOUD_API_HOST:-https://api.pcloud.com}
       - PCLOUD_API_URL=${PCLOUD_API_URL:-https://api.pcloud.com}
       - PCLOUD_CREDENTIAL_ENCRYPTION_KEY=${PCLOUD_CREDENTIAL_ENCRYPTION_KEY:?PCLOUD_CREDENTIAL_ENCRYPTION_KEY is required}
+      - EMAIL_DEFAULT_PROVIDER=${EMAIL_DEFAULT_PROVIDER:-}
+      - EMAIL_ALLOW_FAKE=${EMAIL_ALLOW_FAKE:-false}
+      - GMAIL_CLIENT_ID=${GMAIL_CLIENT_ID:-}
+      - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET:-}
+      - GMAIL_REDIRECT_URI=${GMAIL_REDIRECT_URI:-http://localhost:4000/api/v1/email/accounts/gmail/callback}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy
