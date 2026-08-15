@@ -8,34 +8,28 @@ import { PCloudItemMetadata } from '../pcloud.interface';
 export class PCloudFilesService {
   constructor(
     private prisma: PrismaService,
-    private accountsService: PCloudAccountsService
+    private accountsService: PCloudAccountsService,
   ) {}
 
-  async listFolder(organizationId: string, accountId?: string, folderId: string = '0') {
-    // If accountId is provided, fetch via that account's provider; otherwise use first active account or mock
-    let provider = 'mock_pcloud';
-    let token = 'mock_token';
+  private async resolveAccount(organizationId: string, accountId?: string) {
+    const account = accountId
+      ? await this.prisma.pCloudAccount.findFirst({ where: { id: accountId, organizationId } })
+      : await this.prisma.pCloudAccount.findFirst({ where: { organizationId, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } });
 
-    if (accountId) {
-      const account = await this.prisma.pCloudAccount.findFirst({
-        where: { id: accountId, organizationId },
-      });
-      if (account) {
-        provider = account.provider;
-        token = account.credentials;
-      }
-    } else {
-      const firstAcc = await this.prisma.pCloudAccount.findFirst({
-        where: { organizationId, status: 'ACTIVE' },
-      });
-      if (firstAcc) {
-        provider = firstAcc.provider;
-        token = firstAcc.credentials;
-      }
+    if (!account) {
+      throw new BadRequestException('Connect an active pCloud account before browsing or uploading files.');
     }
+    if (account.status !== 'ACTIVE') {
+      throw new BadRequestException('The selected pCloud account is not active.');
+    }
+    return account;
+  }
 
-    const adapter = PCloudAdapterFactory.getAdapter(provider);
-    return await adapter.listContents(folderId, token);
+  async listFolder(organizationId: string, accountId?: string, folderId: string = '0') {
+    const account = await this.resolveAccount(organizationId, accountId);
+    const token = await this.accountsService.getAccountCredentials(account.id, organizationId);
+    const adapter = PCloudAdapterFactory.getAdapter(account.provider);
+    return await adapter.listContents(folderId, token, account.apiHost || undefined);
   }
 
   async findAllStoredFiles(organizationId: string) {
@@ -59,44 +53,25 @@ export class PCloudFilesService {
     organizationId: string,
     file: { originalname: string; buffer: Buffer; mimetype: string; size: number },
     accountId?: string,
-    folderId: string = '0'
+    folderId: string = '0',
   ) {
-    let provider = 'mock_pcloud';
-    let token = 'mock_token';
-    let selectedAccountId = accountId;
+    const account = await this.resolveAccount(organizationId, accountId);
+    const token = await this.accountsService.getAccountCredentials(account.id, organizationId);
+    const adapter = PCloudAdapterFactory.getAdapter(account.provider);
 
-    if (accountId) {
-      const account = await this.prisma.pCloudAccount.findFirst({
-        where: { id: accountId, organizationId },
-      });
-      if (account) {
-        provider = account.provider;
-        token = account.credentials;
-      }
-    } else {
-      const firstAcc = await this.prisma.pCloudAccount.findFirst({
-        where: { organizationId, status: 'ACTIVE' },
-      });
-      if (firstAcc) {
-        provider = firstAcc.provider;
-        token = firstAcc.credentials;
-        selectedAccountId = firstAcc.id;
-      }
-    }
-
-    const adapter = PCloudAdapterFactory.getAdapter(provider);
     const uploadedMeta: PCloudItemMetadata = await adapter.uploadFile({
       filename: file.originalname,
       buffer: file.buffer,
       mimeType: file.mimetype,
       folderId,
       accessToken: token,
+      apiHost: account.apiHost || undefined,
     });
 
-    const fileRecord = await this.prisma.pCloudFile.create({
+    return this.prisma.pCloudFile.create({
       data: {
         organizationId,
-        pcloudAccountId: selectedAccountId,
+        pcloudAccountId: account.id,
         name: uploadedMeta.name,
         fileId: uploadedMeta.fileId || `pcloud-file-${Date.now()}`,
         folderId: uploadedMeta.folderId || folderId,
@@ -106,18 +81,25 @@ export class PCloudFilesService {
         metadata: JSON.stringify(uploadedMeta.metadata || {}),
       },
     });
-
-    return fileRecord;
   }
 
   async registerExistingPCloudFile(
     organizationId: string,
-    dto: { name: string; fileId: string; folderId?: string; fileSize?: number; mimeType?: string; pcloudAccountId?: string; pcloudPath?: string }
+    dto: { name: string; fileId: string; folderId?: string; fileSize?: number; mimeType?: string; pcloudAccountId?: string; pcloudPath?: string },
   ) {
-    return await this.prisma.pCloudFile.create({
+    if (!dto.pcloudAccountId) {
+      throw new BadRequestException('pcloudAccountId is required when registering an existing pCloud file.');
+    }
+
+    const account = await this.prisma.pCloudAccount.findFirst({
+      where: { id: dto.pcloudAccountId, organizationId },
+    });
+    if (!account) throw new BadRequestException('The selected pCloud account does not belong to your organization.');
+
+    return this.prisma.pCloudFile.create({
       data: {
         organizationId,
-        pcloudAccountId: dto.pcloudAccountId,
+        pcloudAccountId: account.id,
         name: dto.name,
         fileId: dto.fileId,
         folderId: dto.folderId || '0',
@@ -130,15 +112,10 @@ export class PCloudFilesService {
   }
 
   async removeStoredFile(id: string, organizationId: string) {
-    const file = await this.prisma.pCloudFile.findFirst({
-      where: { id, organizationId },
-    });
+    const file = await this.prisma.pCloudFile.findFirst({ where: { id, organizationId } });
     if (!file) throw new NotFoundException(`pCloud file ${id} not found`);
 
-    await this.prisma.pCloudFile.delete({
-      where: { id },
-    });
-
+    await this.prisma.pCloudFile.delete({ where: { id } });
     return { success: true, message: `File reference ${id} removed` };
   }
 }
