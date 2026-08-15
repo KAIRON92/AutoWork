@@ -1,10 +1,5 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  ForbiddenException,
-  Injectable,
-  Reflector,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { AppRole, ROLES_KEY } from './roles.decorator';
 
 const ROLE_RANK: Record<AppRole, number> = {
@@ -27,14 +22,12 @@ export class RolesGuard implements CanActivate {
     ]);
     const role = request.user?.role as AppRole | undefined;
 
-    if (!role) throw new ForbiddenException('A valid application role is required');
+    if (!role || ROLE_RANK[role] === undefined) {
+      throw new ForbiddenException('A valid application role is required');
+    }
 
-    // Reads are available to all authenticated roles unless a route explicitly
-    // narrows them with @Roles(...).
     if (!allowed || allowed.length === 0) {
-      if (request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS') {
-        return true;
-      }
+      if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return true;
       return ROLE_RANK[role] >= ROLE_RANK.MEMBER;
     }
 
