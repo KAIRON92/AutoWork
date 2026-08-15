@@ -14,13 +14,14 @@ model Organization {
   id                 String                  @id @default(uuid())
   name               String
   slug               String                  @unique
-  createdAt          DateTime                @default(now())
-  updatedAt          DateTime                @updatedAt
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
   users              User[]
   roles              Role[]
   permissions        Permission[]
   pcloudAccounts     PCloudAccount[]
   pcloudFiles        PCloudFile[]
+  emailAccounts      EmailAccount[]
   contacts           Contact[]
   contactLists       ContactList[]
   importJobs         ImportJob[]
@@ -91,6 +92,26 @@ model PCloudAccount {
   executions     PCloudShareExecution[]
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
+  @@index([organizationId])
+  @@index([status])
+}
+
+model EmailAccount {
+  id                String       @id @default(uuid())
+  organizationId    String
+  provider          String
+  accountEmail      String
+  displayName       String?
+  status            String       @default("PENDING")
+  credentials       String
+  scopes            String?
+  externalAccountId String?
+  lastVerifiedAt    DateTime?
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaigns         Campaign[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  @@unique([organizationId, provider, accountEmail])
   @@index([organizationId])
   @@index([status])
 }
@@ -201,6 +222,7 @@ model Campaign {
   pcloudAccountId String
   pcloudFileId    String
   templateId      String
+  emailAccountId  String?
   contactListId   String?
   totalCount      Int                    @default(0)
   sharedCount     Int                    @default(0)
@@ -210,6 +232,7 @@ model Campaign {
   pcloudAccount   PCloudAccount          @relation(fields: [pcloudAccountId], references: [id], onDelete: Restrict)
   pcloudFile      PCloudFile             @relation(fields: [pcloudFileId], references: [id], onDelete: Restrict)
   template        Template               @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  emailAccount    EmailAccount?          @relation(fields: [emailAccountId], references: [id], onDelete: SetNull)
   contactList     ContactList?           @relation(fields: [contactListId], references: [id], onDelete: SetNull)
   organization    Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   recipients      CampaignRecipient[]
@@ -218,6 +241,7 @@ model Campaign {
   updatedAt       DateTime               @updatedAt
   @@index([organizationId])
   @@index([status])
+  @@index([emailAccountId])
 }
 
 model CampaignRecipient {
@@ -314,7 +338,7 @@ model ErrorLog {
   stackTrace     String?
   context        String?
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime      @default(now())
   @@index([organizationId])
   @@index([code])
 }
