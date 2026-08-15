@@ -20,7 +20,7 @@ export const configuration = (): AppConfig => ({
   databaseUrl: process.env.DATABASE_URL || 'postgresql://autowork:autoworkpass@localhost:5432/autowork_db?schema=public',
   redisHost: process.env.REDIS_HOST || 'localhost',
   redisPort: parseInt(process.env.REDIS_PORT || '6379', 10),
-  jwtSecret: process.env.JWT_SECRET || 'replace-with-a-long-random-secret',
+  jwtSecret: process.env.JWT_SECRET || '',
   pcloudApiHost: process.env.PCLOUD_API_HOST || 'https://api.pcloud.com',
   pcloudClientId: process.env.PCLOUD_CLIENT_ID || '',
   pcloudClientSecret: process.env.PCLOUD_CLIENT_SECRET || '',
