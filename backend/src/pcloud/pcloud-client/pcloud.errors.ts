@@ -14,6 +14,7 @@ export class PCloudErrorMapper {
       case 2005:
       case 2009:
         return { code: PCloudErrorCode.PCLOUD_FILE_NOT_FOUND, rawCode: rawResult, message: `pCloud File or Folder Not Found: ${msg}`, isTransient: false, timestamp: new Date().toISOString() };
+      case 2010:
       case 2018:
         return { code: PCloudErrorCode.PCLOUD_INVALID_RECIPIENT, rawCode: rawResult, message: `pCloud Invalid Recipient Email: ${msg}`, isTransient: false, timestamp: new Date().toISOString() };
       case 2019:
