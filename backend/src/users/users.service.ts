@@ -11,67 +11,23 @@ export class UsersService {
       include: { organization: true, role: true },
     });
 
-    if (!user) {
-      // Fallback for mock/demo user IDs
-      return {
-        id: userId,
-        email: 'alex@autowork.com',
-        firstName: 'Alex',
-        lastName: 'Morgan',
-        organizationId: 'org-101',
-        role: { name: 'ADMIN' },
-        organization: { id: 'org-101', name: 'Acme Growth Labs', slug: 'acme-growth' },
-      };
-    }
-
+    if (!user) throw new NotFoundException(`User with ID ${userId} not found`);
     return user;
   }
 
   async updateProfile(userId: string, data: { firstName?: string; lastName?: string; email?: string }) {
-    try {
-      return await this.prisma.user.update({
-        where: { id: userId },
-        data,
-      });
-    } catch {
-      return {
-        id: userId,
-        firstName: data.firstName || 'Alex',
-        lastName: data.lastName || 'Morgan',
-        email: data.email || 'alex@autowork.com',
-        updatedAt: new Date().toISOString(),
-      };
-    }
+    return this.prisma.user.update({
+      where: { id: userId },
+      data,
+    });
   }
 
   async findAllByOrg(organizationId: string) {
-    const users = await this.prisma.user.findMany({
+    return this.prisma.user.findMany({
       where: { organizationId },
       include: { role: true },
+      orderBy: { createdAt: 'asc' },
     });
-    if (!users || users.length === 0) {
-      return [
-        {
-          id: 'usr-1',
-          email: 'alex@autowork.com',
-          firstName: 'Alex',
-          lastName: 'Morgan',
-          organizationId,
-          role: 'ADMIN',
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 'usr-2',
-          email: 'sarah@autowork.com',
-          firstName: 'Sarah',
-          lastName: 'Conner',
-          organizationId,
-          role: 'MEMBER',
-          createdAt: new Date().toISOString(),
-        },
-      ];
-    }
-    return users;
   }
 
   async findOne(id: string, organizationId: string) {
@@ -84,11 +40,11 @@ export class UsersService {
     return user;
   }
 
-  async create(organizationId: string, data: { email: string; firstName: string; lastName: string; roleId?: string }) {
-    return await this.prisma.user.create({
+  async create(organizationId: string, data: { email: string; firstName: string; lastName: string; roleId?: string; passwordHash: string }) {
+    return this.prisma.user.create({
       data: {
-        email: data.email,
-        passwordHash: '$2b$10$e8mockhash',
+        email: data.email.trim().toLowerCase(),
+        passwordHash: data.passwordHash,
         firstName: data.firstName,
         lastName: data.lastName,
         organizationId,
@@ -99,16 +55,17 @@ export class UsersService {
 
   async update(id: string, organizationId: string, data: { firstName?: string; lastName?: string; email?: string; roleId?: string }) {
     await this.findOne(id, organizationId);
-    return await this.prisma.user.update({
+    return this.prisma.user.update({
       where: { id },
-      data,
+      data: {
+        ...data,
+        ...(data.email ? { email: data.email.trim().toLowerCase() } : {}),
+      },
     });
   }
 
   async remove(id: string, organizationId: string) {
     await this.findOne(id, organizationId);
-    return await this.prisma.user.delete({
-      where: { id },
-    });
+    return this.prisma.user.delete({ where: { id } });
   }
 }
