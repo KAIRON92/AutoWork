@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -10,6 +10,13 @@ export class UsersService {
     if (!user) return user;
     const { passwordHash: _passwordHash, ...safe } = user;
     return safe;
+  }
+
+  private async validateRole(organizationId: string, roleId?: string) {
+    if (!roleId) return undefined;
+    const role = await this.prisma.role.findFirst({ where: { id: roleId, organizationId } });
+    if (!role) throw new BadRequestException('The selected role does not belong to your organization');
+    return role.id;
   }
 
   async getProfile(userId: string) {
@@ -24,10 +31,7 @@ export class UsersService {
   async updateProfile(userId: string, data: { firstName?: string; lastName?: string; email?: string }) {
     const user = await this.prisma.user.update({
       where: { id: userId },
-      data: {
-        ...data,
-        ...(data.email ? { email: data.email.trim().toLowerCase() } : {}),
-      },
+      data: { ...data, ...(data.email ? { email: data.email.trim().toLowerCase() } : {}) },
       include: { role: true },
     });
     return this.sanitize(user);
@@ -52,6 +56,7 @@ export class UsersService {
   }
 
   async create(organizationId: string, data: { email: string; firstName: string; lastName: string; roleId?: string; password: string }) {
+    const roleId = await this.validateRole(organizationId, data.roleId);
     const passwordHash = await bcrypt.hash(data.password, 12);
     const user = await this.prisma.user.create({
       data: {
@@ -60,7 +65,7 @@ export class UsersService {
         firstName: data.firstName,
         lastName: data.lastName,
         organizationId,
-        roleId: data.roleId,
+        roleId,
       },
       include: { role: true },
     });
@@ -69,11 +74,13 @@ export class UsersService {
 
   async update(id: string, organizationId: string, data: { firstName?: string; lastName?: string; email?: string; roleId?: string }) {
     await this.findOne(id, organizationId);
+    const roleId = await this.validateRole(organizationId, data.roleId);
     const user = await this.prisma.user.update({
       where: { id },
       data: {
         ...data,
         ...(data.email ? { email: data.email.trim().toLowerCase() } : {}),
+        ...(data.roleId !== undefined ? { roleId } : {}),
       },
       include: { role: true },
     });
