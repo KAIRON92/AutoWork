@@ -46,4 +46,9 @@ export const authService = {
       return null;
     }
   },
+
+  async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
+    const response = await apiClient.post('/v1/auth/forgot-password', { email });
+    return response.data;
+  },
 };
