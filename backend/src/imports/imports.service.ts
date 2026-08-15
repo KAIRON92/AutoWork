@@ -1,11 +1,11 @@
-import { Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JobsService } from '../jobs/jobs.service';
 import { FileParserUtil } from './file-parser.util';
 
 export interface ParseImportPayload {
   filename: string;
-  fileContent: string; // Base64 or plain string
+  fileContent: string;
 }
 
 export interface ColumnMappingPayload {
@@ -32,17 +32,30 @@ export interface ConfirmImportPayload {
 export class ImportsService {
   constructor(
     private prisma: PrismaService,
-    @Optional() private jobsService?: JobsService
+    @Optional() private jobsService?: JobsService,
   ) {}
 
   async parseFile(payload: ParseImportPayload) {
-    let content = payload.fileContent;
-    if (content.startsWith('data:') && content.includes('base64,')) {
-      const base64Data = content.split('base64,')[1];
-      content = Buffer.from(base64Data, 'base64').toString('utf-8');
+    const lowerName = payload.filename.toLowerCase();
+    const isWorkbook = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls');
+
+    if (lowerName.endsWith('.xls')) {
+      throw new BadRequestException('Legacy .xls workbooks are not yet supported. Save the workbook as .xlsx or CSV before importing.');
     }
 
-    const result = FileParserUtil.parseTextOrCsv(content);
+    let result;
+    if (isWorkbook) {
+      const base64 = payload.fileContent.includes('base64,')
+        ? payload.fileContent.split('base64,')[1]
+        : payload.fileContent;
+      result = await FileParserUtil.parseWorkbookBase64(base64);
+    } else {
+      let content = payload.fileContent;
+      if (content.startsWith('data:') && content.includes('base64,')) {
+        content = Buffer.from(content.split('base64,')[1], 'base64').toString('utf-8');
+      }
+      result = FileParserUtil.parseTextOrCsv(content);
+    }
 
     return {
       filename: payload.filename,
@@ -61,7 +74,6 @@ export class ImportsService {
     const errors: { row: number; reason: string; email?: string }[] = [];
     const seenInBatch = new Set<string>();
 
-    // Fetch existing emails for organization to detect duplicates
     const existingContacts = await this.prisma.contact.findMany({
       where: { organizationId },
       select: { email: true },
@@ -71,26 +83,19 @@ export class ImportsService {
     mapping.rows.forEach((row, idx) => {
       const rawEmail = row[mapping.emailColumn];
       const email = rawEmail ? rawEmail.toLowerCase().trim() : '';
-
       if (!email || !email.includes('@') || !email.includes('.')) {
         errorCount++;
         errors.push({ row: idx + 1, reason: 'Invalid or missing email address', email: rawEmail });
       } else if (seenInBatch.has(email) || existingEmailSet.has(email)) {
         duplicateCount++;
-        errors.push({ row: idx + 1, reason: 'Duplicate email address (already exists in list or organization)', email });
+        errors.push({ row: idx + 1, reason: 'Duplicate email address', email });
       } else {
         seenInBatch.add(email);
         validCount++;
       }
     });
 
-    return {
-      totalRows: mapping.rows.length,
-      validCount,
-      duplicateCount,
-      errorCount,
-      errors: errors.slice(0, 100), // Return first 100 detailed errors
-    };
+    return { totalRows: mapping.rows.length, validCount, duplicateCount, errorCount, errors: errors.slice(0, 100) };
   }
 
   async confirmImport(organizationId: string, payload: ConfirmImportPayload) {
@@ -111,11 +116,7 @@ export class ImportsService {
     let targetListId = payload.contactListId;
     if (!targetListId && payload.contactListName) {
       const newList = await this.prisma.contactList.create({
-        data: {
-          organizationId,
-          name: payload.contactListName,
-          description: `Created from import: ${payload.filename}`,
-        },
+        data: { organizationId, name: payload.contactListName, description: `Created from import: ${payload.filename}` },
       });
       targetListId = newList.id;
     }
@@ -125,17 +126,13 @@ export class ImportsService {
     let failedCount = 0;
     const errorDetails: any[] = [];
 
-    const existingContacts = await this.prisma.contact.findMany({
-      where: { organizationId },
-      select: { id: true, email: true },
-    });
+    const existingContacts = await this.prisma.contact.findMany({ where: { organizationId }, select: { id: true, email: true } });
     const existingMap = new Map<string, string>(existingContacts.map((c) => [c.email.toLowerCase().trim(), c.id]));
 
     for (let i = 0; i < payload.rows.length; i++) {
       const row = payload.rows[i];
       const rawEmail = row[mapping.emailColumn];
       const email = rawEmail ? rawEmail.toLowerCase().trim() : '';
-
       if (!email || !email.includes('@')) {
         failedCount++;
         errorDetails.push({ row: i + 1, error: 'Invalid email' });
@@ -144,18 +141,13 @@ export class ImportsService {
 
       const firstName = mapping.firstNameColumn ? row[mapping.firstNameColumn] : undefined;
       const lastName = mapping.lastNameColumn ? row[mapping.lastNameColumn] : undefined;
-      const fullName = mapping.fullNameColumn
-        ? row[mapping.fullNameColumn]
-        : firstName || lastName
-          ? `${firstName || ''} ${lastName || ''}`.trim()
-          : undefined;
+      const fullName = mapping.fullNameColumn ? row[mapping.fullNameColumn] : firstName || lastName ? `${firstName || ''} ${lastName || ''}`.trim() : undefined;
       const company = mapping.companyColumn ? row[mapping.companyColumn] : undefined;
       const phone = mapping.phoneColumn ? row[mapping.phoneColumn] : undefined;
       const target = mapping.targetColumn ? row[mapping.targetColumn] : undefined;
 
       try {
         let contactId = existingMap.get(email);
-
         if (!contactId) {
           const contact = await this.prisma.contact.create({
             data: {
@@ -174,22 +166,12 @@ export class ImportsService {
           contactId = contact.id;
           existingMap.set(email, contactId);
           importedCount++;
-        } else {
-          duplicateCount++;
-        }
+        } else duplicateCount++;
 
         if (targetListId && contactId) {
           await this.prisma.contactListMember.upsert({
-            where: {
-              contactId_contactListId: {
-                contactId,
-                contactListId: targetListId,
-              },
-            },
-            create: {
-              contactId,
-              contactListId: targetListId,
-            },
+            where: { contactId_contactListId: { contactId, contactListId: targetListId } },
+            create: { contactId, contactListId: targetListId },
             update: {},
           });
         }
@@ -210,23 +192,15 @@ export class ImportsService {
       },
     });
 
-    return {
-      ...updatedJob,
-      targetListId,
-    };
+    return { ...updatedJob, targetListId };
   }
 
   async findAllByOrg(organizationId: string) {
-    return await this.prisma.importJob.findMany({
-      where: { organizationId },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.prisma.importJob.findMany({ where: { organizationId }, orderBy: { createdAt: 'desc' } });
   }
 
   async findOne(id: string, organizationId: string) {
-    const job = await this.prisma.importJob.findFirst({
-      where: { id, organizationId },
-    });
+    const job = await this.prisma.importJob.findFirst({ where: { id, organizationId } });
     if (!job) throw new NotFoundException(`Import job ${id} not found`);
     return job;
   }
