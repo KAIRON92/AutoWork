@@ -9,15 +9,16 @@ export class AuthService {
 
   async login(email: string, passwordPlain: string) {
     const normalizedEmail = email.toLowerCase().trim();
-    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail }, include: { organization: true } });
+    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail }, include: { organization: true, role: true } });
     if (!user) throw new UnauthorizedException('Invalid email or password');
 
     const isValid = await bcrypt.compare(passwordPlain, user.passwordHash);
     if (!isValid) throw new UnauthorizedException('Invalid email or password');
 
-    const token = this.jwtService.sign({ sub: user.id, email: user.email, orgId: user.organizationId, role: 'ADMIN' });
+    const role = user.role?.name || 'ADMIN';
+    const token = this.jwtService.sign({ sub: user.id, email: user.email, orgId: user.organizationId, role });
     return {
-      user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, organizationId: user.organizationId, role: 'ADMIN' },
+      user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, organizationId: user.organizationId, role },
       organization: { id: user.organization.id, name: user.organization.name, slug: user.organization.slug },
       token,
     };
@@ -42,8 +43,6 @@ export class AuthService {
   }
 
   async forgotPassword(email: string) {
-    // Reset-token delivery is intentionally not faked. Wire this endpoint to a real
-    // transactional provider when the product requirement supplies one.
     return { success: true, message: `If an account exists for ${email}, reset instructions will be generated.` };
   }
 
