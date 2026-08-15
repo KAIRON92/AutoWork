@@ -1,25 +1,36 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import axios from 'axios';
-import { Cloud, ArrowLeft, CheckCircle2, Lock } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Cloud, CheckCircle2, Lock } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
-  const [token, setToken] = useState('demo-reset-token');
+  const searchParams = useSearchParams();
+  const [token, setToken] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    setToken(searchParams.get('token') || '');
+  }, [searchParams]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    if (!token) {
+      setError('This reset link is invalid or incomplete.');
+      return;
+    }
     if (!password || password !== confirmPassword) {
-      alert('Passwords must match and cannot be empty.');
+      setError('Passwords must match and cannot be empty.');
       return;
     }
 
@@ -28,7 +39,7 @@ export default function ResetPasswordPage() {
       await axios.post(`${API_BASE}/v1/auth/reset-password`, { token, password });
       setSubmitted(true);
     } catch (err: any) {
-      alert(`Reset failed: ${err.message}`);
+      setError(err.response?.data?.message || 'Password reset failed.');
     } finally {
       setLoading(false);
     }
@@ -52,59 +63,28 @@ export default function ResetPasswordPage() {
                 <CheckCircle2 className="h-6 w-6" />
               </div>
               <p className="text-sm font-semibold text-white">Password Reset Complete</p>
-              <p className="text-xs text-slate-400">
-                Your password has been successfully updated. You can now sign in with your new credentials.
-              </p>
-              <Link
-                href="/login"
-                className="inline-block px-5 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-600/30"
-              >
-                Sign in to Dashboard
-              </Link>
+              <p className="text-xs text-slate-400">Your password has been successfully updated. You can now sign in with your new credentials.</p>
+              <Link href="/login" className="inline-block px-5 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-600/30">Sign in to Dashboard</Link>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {error && <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs" role="alert">{error}</div>}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                  New Password
-                </label>
+                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">New Password</label>
                 <div className="relative">
                   <Lock className="h-4 w-4 absolute left-3 top-3 text-slate-500" />
-                  <input
-                    type="password"
-                    required
-                    placeholder="••••••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full text-xs text-white bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-                  />
+                  <input type="password" required minLength={8} placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full text-xs text-white bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500" />
                 </div>
               </div>
-
               <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                  Confirm Password
-                </label>
+                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Confirm Password</label>
                 <div className="relative">
                   <Lock className="h-4 w-4 absolute left-3 top-3 text-slate-500" />
-                  <input
-                    type="password"
-                    required
-                    placeholder="••••••••••••"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full text-xs text-white bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-                  />
+                  <input type="password" required minLength={8} placeholder="••••••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full text-xs text-white bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500" />
                 </div>
               </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-2.5 px-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-95 text-white text-xs font-semibold rounded-xl shadow-md shadow-blue-600/30 transition-all"
-              >
-                {loading ? 'Updating password...' : 'Update Password & Sign In'}
-              </button>
+              <button type="submit" disabled={loading} className="w-full py-2.5 px-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-95 text-white text-xs font-semibold rounded-xl shadow-md shadow-blue-600/30 transition-all">{loading ? 'Updating password...' : 'Update Password'}</button>
+              <div className="text-center pt-2"><Link href="/login" className="text-xs font-medium text-slate-400 hover:text-slate-300">Back to sign in</Link></div>
             </form>
           )}
         </div>
