@@ -5,10 +5,12 @@ import {
   Body,
   Request,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
+import { AuthRateLimitGuard } from './auth-rate-limit.guard';
 
 const AUTH_COOKIE = 'autowork_jwt_token';
 const AUTH_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
@@ -35,19 +37,20 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('login')
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: 'Login with email and password' })
   async login(
-    @Body() body: { email: string; passwordHash?: string; password?: string },
+    @Body() body: { email: string; password: string },
     @Res({ passthrough: true }) res: Response,
   ) {
-    const password = body.password || body.passwordHash || '';
-    const result = await this.authService.login(body.email, password);
+    const result = await this.authService.login(body.email, body.password);
     setAuthCookie(res, result.token);
     const { token: _token, ...safeResponse } = result;
     return safeResponse;
   }
 
   @Post('register')
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: 'Register a new tenant organization and administrator' })
   async register(
     @Body() body: { email: string; password: string; firstName: string; lastName: string; organizationName: string },
@@ -67,12 +70,14 @@ export class AuthController {
   }
 
   @Post('forgot-password')
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: 'Request password reset instructions' })
   async forgotPassword(@Body() body: { email: string }) {
     return await this.authService.forgotPassword(body.email);
   }
 
   @Post('reset-password')
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: 'Reset password with reset token' })
   async resetPassword(@Body() body: { token: string; password: string }) {
     return await this.authService.resetPassword(body.token, body.password);
@@ -81,8 +86,6 @@ export class AuthController {
   @Get('me')
   @ApiOperation({ summary: 'Get current logged in user and tenant profile' })
   async getProfile(@Request() req: any) {
-    return {
-      user: req.user,
-    };
+    return { user: req.user };
   }
 }
