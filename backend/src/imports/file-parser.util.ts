@@ -1,3 +1,5 @@
+import ExcelJS from 'exceljs';
+
 export interface ParsedFileData {
   headers: string[];
   rows: Record<string, string>[];
@@ -6,9 +8,6 @@ export interface ParsedFileData {
 }
 
 export class FileParserUtil {
-  /**
-   * Automatically guesses which file column corresponds to target contact fields
-   */
   static detectColumnMapping(headers: string[]): Record<string, string> {
     const mapping: Record<string, string> = {
       email: '',
@@ -25,39 +24,23 @@ export class FileParserUtil {
 
     for (const h of headers) {
       const norm = normalize(h);
-
-      if (!mapping.email && (norm === 'email' || norm === 'emailaddress' || norm === 'mail' || norm.includes('email'))) {
-        mapping.email = h;
-      } else if (!mapping.firstName && (norm === 'firstname' || norm === 'fname' || norm === 'first' || norm === 'givenname')) {
-        mapping.firstName = h;
-      } else if (!mapping.lastName && (norm === 'lastname' || norm === 'lname' || norm === 'last' || norm === 'surname')) {
-        mapping.lastName = h;
-      } else if (!mapping.fullName && (norm === 'name' || norm === 'fullname' || norm === 'contactname')) {
-        mapping.fullName = h;
-      } else if (!mapping.company && (norm.startsWith('company') || norm.includes('company') || norm === 'organization' || norm === 'org' || norm === 'business' || norm === 'account')) {
-        mapping.company = h;
-      } else if (!mapping.phone && (norm === 'phone' || norm === 'phonenumber' || norm === 'mobile' || norm === 'tel')) {
-        mapping.phone = h;
-      } else if (!mapping.target && (norm === 'target' || norm === 'division' || norm === 'industry' || norm === 'segment')) {
-        mapping.target = h;
-      } else if (!mapping.description && (norm === 'description' || norm === 'notes' || norm === 'message')) {
-        mapping.description = h;
-      }
+      if (!mapping.email && (norm === 'email' || norm === 'emailaddress' || norm === 'mail' || norm.includes('email'))) mapping.email = h;
+      else if (!mapping.firstName && (norm === 'firstname' || norm === 'fname' || norm === 'first' || norm === 'givenname')) mapping.firstName = h;
+      else if (!mapping.lastName && (norm === 'lastname' || norm === 'lname' || norm === 'last' || norm === 'surname')) mapping.lastName = h;
+      else if (!mapping.fullName && (norm === 'name' || norm === 'fullname' || norm === 'contactname')) mapping.fullName = h;
+      else if (!mapping.company && (norm.startsWith('company') || norm.includes('company') || norm === 'organization' || norm === 'org' || norm === 'business' || norm === 'account')) mapping.company = h;
+      else if (!mapping.phone && (norm === 'phone' || norm === 'phonenumber' || norm === 'mobile' || norm === 'tel')) mapping.phone = h;
+      else if (!mapping.target && (norm === 'target' || norm === 'division' || norm === 'industry' || norm === 'segment')) mapping.target = h;
+      else if (!mapping.description && (norm === 'description' || norm === 'notes' || norm === 'message')) mapping.description = h;
     }
 
     return mapping;
   }
 
-  /**
-   * Parse CSV, TXT (tab or comma separated), or structured lines
-   */
   static parseTextOrCsv(content: string): ParsedFileData {
-    const lines = content.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
-    if (lines.length === 0) {
-      return { headers: [], rows: [], totalRows: 0, detectedMapping: {} };
-    }
+    const lines = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) return { headers: [], rows: [], totalRows: 0, detectedMapping: {} };
 
-    // Determine delimiter (comma, semicolon, tab, or pipe)
     const firstLine = lines[0];
     let delimiter = ',';
     if (firstLine.includes('\t')) delimiter = '\t';
@@ -68,41 +51,52 @@ export class FileParserUtil {
       const values: string[] = [];
       let current = '';
       let insideQuotes = false;
-
       for (let i = 0; i < line.length; i++) {
         const char = line[i];
-        if (char === '"' || char === "'") {
-          insideQuotes = !insideQuotes;
-        } else if (char === delimiter && !insideQuotes) {
+        if (char === '"' || char === "'") insideQuotes = !insideQuotes;
+        else if (char === delimiter && !insideQuotes) {
           values.push(current.trim().replace(/^["']|["']$/g, ''));
           current = '';
-        } else {
-          current += char;
-        }
+        } else current += char;
       }
       values.push(current.trim().replace(/^["']|["']$/g, ''));
       return values;
     };
 
     const headers = parseLine(lines[0]);
-    const detectedMapping = this.detectColumnMapping(headers);
     const rows: Record<string, string>[] = [];
-
     for (let i = 1; i < lines.length; i++) {
       const values = parseLine(lines[i]);
-      if (values.every((v) => v === '')) continue; // Skip blank rows
+      if (values.every((v) => v === '')) continue;
       const rowObj: Record<string, string> = {};
-      headers.forEach((h, idx) => {
-        rowObj[h] = values[idx] || '';
-      });
+      headers.forEach((h, idx) => { rowObj[h] = values[idx] || ''; });
       rows.push(rowObj);
     }
+    return { headers, rows, totalRows: rows.length, detectedMapping: this.detectColumnMapping(headers) };
+  }
 
-    return {
-      headers,
-      rows,
-      totalRows: rows.length,
-      detectedMapping,
-    };
+  static async parseWorkbookBase64(base64: string): Promise<ParsedFileData> {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Buffer.from(base64, 'base64'));
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) return { headers: [], rows: [], totalRows: 0, detectedMapping: {} };
+
+    const headerValues = (worksheet.getRow(1).values as unknown[]).slice(1).map((v) => String(v ?? '').trim());
+    const headers = headerValues.filter(Boolean);
+    const rows: Record<string, string>[] = [];
+
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const values = (row.values as unknown[]).slice(1);
+      if (values.every((v) => v === null || v === undefined || String(v).trim() === '')) return;
+      const item: Record<string, string> = {};
+      headers.forEach((header, index) => {
+        const value = values[index];
+        item[header] = value instanceof Date ? value.toISOString() : String(value ?? '').trim();
+      });
+      rows.push(item);
+    });
+
+    return { headers, rows, totalRows: rows.length, detectedMapping: this.detectColumnMapping(headers) };
   }
 }
