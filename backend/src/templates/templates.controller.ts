@@ -7,9 +7,16 @@ import {
   Param,
   Body,
   Request,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { TemplatesService, CreateTemplateDto, PreviewTemplateDto } from './templates.service';
+
+function currentOrgId(req: any): string {
+  const orgId = req.user?.orgId;
+  if (!orgId) throw new UnauthorizedException('Organization context is missing');
+  return orgId;
+}
 
 @ApiTags('Templates')
 @ApiBearerAuth()
@@ -20,22 +27,19 @@ export class TemplatesController {
   @Get()
   @ApiOperation({ summary: 'List all description templates for current tenant' })
   async findAll(@Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.templatesService.findAll(orgId);
+    return this.templatesService.findAll(currentOrgId(req));
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get single description template' })
   async findOne(@Param('id') id: string, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.templatesService.findOne(id, orgId);
+    return this.templatesService.findOne(id, currentOrgId(req));
   }
 
   @Post()
   @ApiOperation({ summary: 'Create new description template' })
   async create(@Body() dto: CreateTemplateDto, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.templatesService.create(orgId, dto);
+    return this.templatesService.create(currentOrgId(req), dto);
   }
 
   @Post('preview')
@@ -47,21 +51,18 @@ export class TemplatesController {
   @Post(':id/duplicate')
   @ApiOperation({ summary: 'Duplicate an existing template' })
   async duplicate(@Param('id') id: string, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.templatesService.duplicate(id, orgId);
+    return this.templatesService.duplicate(id, currentOrgId(req));
   }
 
   @Put(':id')
   @ApiOperation({ summary: 'Update an existing template' })
   async update(@Param('id') id: string, @Body() dto: Partial<CreateTemplateDto>, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.templatesService.update(id, orgId, dto);
+    return this.templatesService.update(id, currentOrgId(req), dto);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a template' })
   async remove(@Param('id') id: string, @Request() req: any) {
-    const orgId = req.user?.orgId || 'org-101';
-    return await this.templatesService.remove(id, orgId);
+    return this.templatesService.remove(id, currentOrgId(req));
   }
 }
