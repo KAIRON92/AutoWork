@@ -13,6 +13,17 @@ const ROLE_RANK: Record<AppRole, number> = {
   ADMIN: 3,
 };
 
+function isPublicPath(path: string): boolean {
+  return (
+    path.startsWith('/api/v1/auth/login') ||
+    path.startsWith('/api/v1/auth/register') ||
+    path.startsWith('/api/v1/auth/forgot-password') ||
+    path.startsWith('/api/v1/auth/reset-password') ||
+    path.startsWith('/api/health') ||
+    path.startsWith('/api/docs')
+  );
+}
+
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
@@ -21,6 +32,9 @@ export class RolesGuard implements CanActivate {
     if (context.getType() !== 'http') return true;
 
     const request = context.switchToHttp().getRequest();
+    const path = request.originalUrl || request.url || '';
+    if (isPublicPath(path)) return true;
+
     const allowed = this.reflector.getAllAndOverride<AppRole[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),
