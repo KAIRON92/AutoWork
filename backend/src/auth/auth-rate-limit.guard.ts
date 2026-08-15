@@ -1,4 +1,5 @@
-import { CanActivate, ExecutionContext, Injectable, ServiceUnavailableException, TooManyRequestsException, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { TooManyRequestsException } from '@nestjs/common/exceptions/too-many-requests.exception';
 import Redis from 'ioredis';
 import { ConfigService } from '../config/config.service';
 
@@ -22,7 +23,8 @@ export class AuthRateLimitGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const path = request.route?.path || request.url || 'auth';
     const email = typeof request.body?.email === 'string' ? request.body.email.trim().toLowerCase() : 'anonymous';
-    const ip = request.ip || request.headers?.['x-forwarded-for'] || 'unknown';
+    const forwarded = request.headers?.['x-forwarded-for'];
+    const ip = request.ip || (Array.isArray(forwarded) ? forwarded[0] : forwarded) || 'unknown';
     const bucket = path.includes('/login') ? this.loginLimit : this.otherAuthLimit;
     const key = `autowork:auth-rate:${path}:${ip}:${email}`;
 
@@ -30,10 +32,12 @@ export class AuthRateLimitGuard implements CanActivate {
       if (this.redis.status !== 'ready') await this.redis.connect();
       const count = await this.redis.incr(key);
       if (count === 1) await this.redis.expire(key, this.windowSeconds);
-      if (count > bucket) throw new TooManyRequestsException('Too many authentication attempts. Please try again later.');
+      if (count > bucket) {
+        throw new TooManyRequestsException('Too many authentication attempts. Please try again later.');
+      }
       return true;
     } catch (error) {
-      if (error instanceof TooManyRequestsException || error instanceof UnauthorizedException) throw error;
+      if (error instanceof TooManyRequestsException) throw error;
       throw new ServiceUnavailableException('Authentication rate-limit service is unavailable');
     }
   }
