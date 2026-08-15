@@ -42,10 +42,9 @@ export class UsersController {
 
   @Post()
   @Roles('ADMIN')
-  async create(@Req() req: any, @Body() body: { email: string; firstName: string; lastName: string; roleId?: string; passwordHash?: string }) {
-    const passwordHash = body.passwordHash?.trim();
-    if (!passwordHash) throw new BadRequestException('passwordHash is required when creating a user');
-    return this.usersService.create(currentOrgId(req), { ...body, passwordHash });
+  async create(@Req() req: any, @Body() body: { email: string; firstName: string; lastName: string; roleId?: string; password?: string }) {
+    if (!body.password) throw new BadRequestException('password is required when creating a user');
+    return this.usersService.create(currentOrgId(req), body);
   }
 
   @Patch(':id')
