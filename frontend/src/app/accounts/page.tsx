@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Shell } from '@/components/layout/shell';
 import { accountsService } from '@/services/accountsService';
 import { PCloudAccount } from '@/types';
-import { Cloud, Plus, CheckCircle2, PauseCircle, Trash2, ShieldCheck, Check, RefreshCw } from 'lucide-react';
+import { Cloud, Plus, CheckCircle2, PauseCircle, Trash2, ShieldCheck, Check, RefreshCw, Eye, EyeOff } from 'lucide-react';
 
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<PCloudAccount[]>([]);
@@ -15,6 +15,7 @@ export default function AccountsPage() {
   const [name, setName] = useState('');
   const [accountEmail, setAccountEmail] = useState('');
   const [accessToken, setAccessToken] = useState('');
+  const [showCredential, setShowCredential] = useState(false);
   const [dailyLimit, setDailyLimit] = useState(500);
 
   const fetchAccounts = async () => {
@@ -62,7 +63,7 @@ export default function AccountsPage() {
       const newAcc = await accountsService.create({ name, accountEmail, provider: 'pcloud', accessToken, dailyLimit: Number(dailyLimit) });
       setAccounts((prev) => [newAcc, ...prev]);
       setIsModalOpen(false);
-      setName(''); setAccountEmail(''); setAccessToken('');
+      setName(''); setAccountEmail(''); setAccessToken(''); setShowCredential(false);
     } catch (err: any) {
       alert(`Error connecting pCloud account: ${err.response?.data?.message || err.message || 'Connection failed'}`);
     }
@@ -123,7 +124,16 @@ export default function AccountsPage() {
             <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Account Friendly Name</label><input type="text" required placeholder="e.g. Client Premium Account" value={name} onChange={(e) => setName(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" /></div>
             <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">pCloud Registered Email</label><input type="email" required placeholder="pcloud-user@yourcompany.com" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" /></div>
             <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Engine / Adapter Type</label><input readOnly value="Official pCloud REST API (Production)" className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 bg-slate-50 text-slate-700" /></div>
-            <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">pCloud Access Token or Account Password</label><input type="password" required placeholder="Paste access token or enter account password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 font-mono" /><p className="text-[11px] text-slate-500 mt-1">For a password, AutoWork exchanges it for a pCloud auth token and does not store the password.</p></div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">pCloud Access Token or Account Password</label>
+              <div className="relative">
+                <input type={showCredential ? 'text' : 'password'} required placeholder="Paste access token or enter account password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)} autoComplete="new-password" className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 pr-10 font-mono" />
+                <button type="button" onClick={() => setShowCredential((visible) => !visible)} aria-label={showCredential ? 'Hide credential' : 'Show credential'} className="absolute inset-y-0 right-0 px-3 text-slate-500 hover:text-slate-800">
+                  {showCredential ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">For a password, AutoWork exchanges it for a pCloud auth token and does not store the password.</p>
+            </div>
             <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Daily Share/Transfer Cap</label><input type="number" min="1" max="10000" value={dailyLimit} onChange={(e) => setDailyLimit(Number(e.target.value))} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" /></div>
             <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100"><button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600">Cancel</button><button type="submit" className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-xs font-semibold flex items-center gap-1.5"><Check className="h-4 w-4" />Verify & Save Production Account</button></div>
           </form>
