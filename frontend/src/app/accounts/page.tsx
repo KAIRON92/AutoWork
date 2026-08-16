@@ -15,8 +15,10 @@ export default function AccountsPage() {
   const [name, setName] = useState('');
   const [accountEmail, setAccountEmail] = useState('');
   const [accessToken, setAccessToken] = useState('');
+  const [otpCode, setOtpCode] = useState('');
   const [showCredential, setShowCredential] = useState(false);
   const [dailyLimit, setDailyLimit] = useState(500);
+  const [formError, setFormError] = useState('');
 
   const fetchAccounts = async () => {
     try {
@@ -58,14 +60,29 @@ export default function AccountsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !accountEmail || !accessToken) return;
+    setFormError('');
+    if (!name || !accountEmail || !accessToken) {
+      setFormError('Account name, registered email, and pCloud credential are required.');
+      return;
+    }
     try {
-      const newAcc = await accountsService.create({ name, accountEmail, provider: 'pcloud', accessToken, dailyLimit: Number(dailyLimit) });
+      const newAcc = await accountsService.create({
+        name,
+        accountEmail,
+        provider: 'pcloud',
+        accessToken,
+        dailyLimit: Number(dailyLimit),
+        ...(otpCode.trim() ? { otpCode: otpCode.trim() } : {}),
+      } as any);
       setAccounts((prev) => [newAcc, ...prev]);
       setIsModalOpen(false);
-      setName(''); setAccountEmail(''); setAccessToken(''); setShowCredential(false);
+      setName('');
+      setAccountEmail('');
+      setAccessToken('');
+      setOtpCode('');
+      setShowCredential(false);
     } catch (err: any) {
-      alert(`Error connecting pCloud account: ${err.response?.data?.message || err.message || 'Connection failed'}`);
+      setFormError(err.response?.data?.message || err.message || 'Connection failed');
     }
   };
 
@@ -80,7 +97,7 @@ export default function AccountsPage() {
             </div>
             <p className="text-sm text-slate-500 mt-1">Connect and manage authenticated production pCloud accounts for file transfers and sharing.</p>
           </div>
-          <button onClick={() => setIsModalOpen(true)} className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold shadow-md flex items-center gap-2"><Plus className="h-4 w-4" />Connect pCloud Account</button>
+          <button onClick={() => { setFormError(''); setIsModalOpen(true); }} className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold shadow-md flex items-center gap-2"><Plus className="h-4 w-4" />Connect pCloud Account</button>
         </div>
 
         <div className="p-4 rounded-xl bg-cyan-50 border border-cyan-200 text-cyan-950 flex items-start gap-3">
@@ -118,8 +135,11 @@ export default function AccountsPage() {
           })}
         </div>
 
+        {!loading && accounts.length === 0 && <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">No authenticated pCloud accounts are connected. Connect and verify a real production account before browsing or uploading files.</div>}
+
         {isModalOpen && <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"><div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-6">
           <div className="border-b border-slate-100 pb-4"><h3 className="text-lg font-bold text-slate-900">Connect Production pCloud Account</h3><p className="text-xs text-slate-500">Official pCloud REST API only. Credentials are verified before anything is stored.</p></div>
+          {formError && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{formError}</div>}
           <form onSubmit={handleCreate} className="space-y-4">
             <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Account Friendly Name</label><input type="text" required placeholder="e.g. Client Premium Account" value={name} onChange={(e) => setName(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" /></div>
             <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">pCloud Registered Email</label><input type="email" required placeholder="pcloud-user@yourcompany.com" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" /></div>
@@ -128,11 +148,14 @@ export default function AccountsPage() {
               <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">pCloud Access Token or Account Password</label>
               <div className="relative">
                 <input type={showCredential ? 'text' : 'password'} required placeholder="Paste access token or enter account password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)} autoComplete="new-password" className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 pr-10 font-mono" />
-                <button type="button" onClick={() => setShowCredential((visible) => !visible)} aria-label={showCredential ? 'Hide credential' : 'Show credential'} className="absolute inset-y-0 right-0 px-3 text-slate-500 hover:text-slate-800">
-                  {showCredential ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+                <button type="button" onClick={() => setShowCredential((visible) => !visible)} aria-label={showCredential ? 'Hide credential' : 'Show credential'} className="absolute inset-y-0 right-0 px-3 text-slate-500 hover:text-slate-800">{showCredential ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
               </div>
               <p className="text-[11px] text-slate-500 mt-1">For a password, AutoWork exchanges it for a pCloud auth token and does not store the password.</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">pCloud 2FA Code <span className="normal-case font-normal text-slate-400">(only if enabled)</span></label>
+              <input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{4,8}" placeholder="Enter current verification code" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8))} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 font-mono tracking-widest" />
+              <p className="text-[11px] text-slate-500 mt-1">Leave blank when the pCloud account does not use two-factor authentication.</p>
             </div>
             <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Daily Share/Transfer Cap</label><input type="number" min="1" max="10000" value={dailyLimit} onChange={(e) => setDailyLimit(Number(e.target.value))} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" /></div>
             <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100"><button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600">Cancel</button><button type="submit" className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-xs font-semibold flex items-center gap-1.5"><Check className="h-4 w-4" />Verify & Save Production Account</button></div>
