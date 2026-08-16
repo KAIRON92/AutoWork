@@ -6,36 +6,33 @@ import {
 } from '../email.adapter';
 
 interface GmailCredentials {
-  accessToken?: string;
+  accessToken: string;
   refreshToken?: string;
   expiresAt?: number;
+  scope?: string;
   tokenType?: string;
+  accountEmail?: string;
 }
 
 function jsonErrorMessage(value: any): string {
-  return value?.error?.message || value?.error_description || 'Gmail API request failed';
+  return value?.error?.message || value?.error_description || value?.error || 'Gmail API request failed';
 }
 
 export class GmailAdapter implements IEmailAdapter {
   readonly providerName = 'gmail';
 
-  private credentials(payload: Record<string, any>): GmailCredentials {
-    const credentials = payload?.credentials && typeof payload.credentials === 'object'
-      ? payload.credentials
-      : payload;
-    if (!credentials?.accessToken) throw new Error('Gmail access token is required');
-    return credentials as GmailCredentials;
+  private requireClientConfig() {
+    const clientId = process.env.GMAIL_CLIENT_ID?.trim();
+    const clientSecret = process.env.GMAIL_CLIENT_SECRET?.trim();
+    if (!clientId || !clientSecret) {
+      throw new Error('Gmail OAuth client configuration is required.');
+    }
+    return { clientId, clientSecret };
   }
 
-  private async refreshAccessToken(credentials: GmailCredentials): Promise<string> {
-    if (!credentials.refreshToken) return credentials.accessToken!;
-    if (!credentials.expiresAt || Date.now() < Number(credentials.expiresAt) - 60_000) {
-      return credentials.accessToken!;
-    }
-
-    const clientId = process.env.GMAIL_CLIENT_ID;
-    const clientSecret = process.env.GMAIL_CLIENT_SECRET;
-    if (!clientId || !clientSecret) throw new Error('Gmail OAuth client configuration is missing');
+  private async refresh(credentials: GmailCredentials): Promise<GmailCredentials> {
+    if (!credentials.refreshToken) return credentials;
+    const { clientId, clientSecret } = this.requireClientConfig();
 
     const response = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -47,95 +44,124 @@ export class GmailAdapter implements IEmailAdapter {
         grant_type: 'refresh_token',
       }).toString(),
     });
-    const result = await response.json();
-    if (!response.ok || !result.access_token) throw new Error(jsonErrorMessage(result));
 
-    credentials.accessToken = result.access_token;
-    credentials.expiresAt = Date.now() + Number(result.expires_in || 3600) * 1000;
-    return credentials.accessToken;
+    const payload = await response.json();
+    if (!response.ok || !payload.access_token) {
+      throw new Error(jsonErrorMessage(payload));
+    }
+
+    return {
+      ...credentials,
+      accessToken: String(payload.access_token),
+      expiresAt: Date.now() + Number(payload.expires_in || 3600) * 1000,
+    };
   }
 
-  async validateAccount(credentials: Record<string, any>): Promise<EmailAccountValidationResult> {
+  private async getUsableCredentials(input: Record<string, any>): Promise<GmailCredentials> {
+    const credentials = input as GmailCredentials;
+    if (!credentials.accessToken) throw new Error('Gmail access token is required');
+    if (!credentials.expiresAt || Date.now() < Number(credentials.expiresAt) - 60_000) return credentials;
+    return this.refresh(credentials);
+  }
+
+  async validateAccount(credentialsInput: Record<string, any>): Promise<EmailAccountValidationResult> {
     try {
-      const normalized = this.credentials(credentials);
-      const accessToken = await this.refreshAccessToken(normalized);
-      const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${accessToken}` },
+      const credentials = await this.getUsableCredentials(credentialsInput);
+      const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+        headers: { Authorization: `Bearer ${credentials.accessToken}` },
       });
-      const profile = await response.json();
-      if (!response.ok || !profile.email) {
+      const payload = await response.json();
+      if (!response.ok || !payload.emailAddress) {
         return {
           valid: false,
-          message: jsonErrorMessage(profile),
-          accountEmail: profile?.email || '',
+          message: jsonErrorMessage(payload),
+          accountEmail: String(credentials.accountEmail || ''),
         };
       }
       return {
         valid: true,
-        message: 'Gmail account authenticated successfully.',
-        accountEmail: String(profile.email).toLowerCase(),
-        details: { subject: profile.sub, name: profile.name },
+        message: 'Gmail mailbox and API access verified.',
+        accountEmail: String(payload.emailAddress).toLowerCase(),
+        details: { messagesTotal: payload.messagesTotal, threadsTotal: payload.threadsTotal },
       };
     } catch (error: any) {
       return {
         valid: false,
-        message: error?.message || 'Unable to authenticate Gmail account.',
-        accountEmail: '',
+        message: error?.message || 'Gmail account validation failed.',
+        accountEmail: String(credentialsInput.accountEmail || ''),
       };
     }
   }
 
   async sendEmail(payload: SendEmailPayload): Promise<SendEmailResult> {
-    const timestamp = new Date();
+    const startedAt = new Date();
     try {
-      const credentials = this.credentials(payload.accountCredentials || {});
-      const accessToken = await this.refreshAccessToken(credentials);
-      const toName = payload.to.name ? ` ${payload.to.name}` : '';
-      const headers = [
-        `To: ${payload.to.email}${toName}`,
+      const credentials = await this.getUsableCredentials(payload.accountCredentials || {});
+      const from = String(payload.accountCredentials?.accountEmail || '').trim();
+      if (!from) throw new Error('Verified Gmail sender address is required');
+
+      const lines = [
+        `From: ${from}`,
+        `To: ${payload.to.email}`,
         `Subject: ${payload.subject}`,
         'MIME-Version: 1.0',
-        'Content-Type: text/plain; charset="UTF-8"',
-        '',
-        payload.body,
       ];
-      const raw = Buffer.from(headers.join('\r\n'), 'utf8').toString('base64url');
 
+      const attachments = payload.attachments || [];
+      if (attachments.length === 0) {
+        lines.push('Content-Type: text/plain; charset="UTF-8"', '', payload.body);
+      } else {
+        const boundary = `=_AutoWork_${Date.now().toString(36)}`;
+        lines.push(`Content-Type: multipart/mixed; boundary="${boundary}"`, '');
+        lines.push(`--${boundary}`, 'Content-Type: text/plain; charset="UTF-8"', 'Content-Transfer-Encoding: 8bit', '', payload.body);
+
+        for (const attachment of attachments) {
+          if (attachment.content === undefined) {
+            throw new Error(`Attachment ${attachment.filename} has no inline content.`);
+          }
+          const content = Buffer.isBuffer(attachment.content)
+            ? attachment.content
+            : Buffer.from(String(attachment.content));
+          lines.push(
+            `--${boundary}`,
+            `Content-Type: ${attachment.mimeType || 'application/octet-stream'}; name="${attachment.filename}"`,
+            'Content-Transfer-Encoding: base64',
+            `Content-Disposition: attachment; filename="${attachment.filename}"`,
+            '',
+            content.toString('base64').replace(/(.{76})/g, '$1\r\n'),
+          );
+        }
+        lines.push(`--${boundary}--`, '');
+      }
+
+      const raw = Buffer.from(lines.join('\r\n')).toString('base64url');
       const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${credentials.accessToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ raw }),
       });
       const result = await response.json();
       if (!response.ok || !result.id) {
-        return {
-          success: false,
-          provider: this.providerName,
-          statusCode: response.status,
-          responseMessage: jsonErrorMessage(result),
-          error: { code: `GMAIL_${response.status}`, message: jsonErrorMessage(result) },
-          timestamp,
-        };
+        throw new Error(jsonErrorMessage(result));
       }
 
       return {
         success: true,
+        messageId: String(result.id),
         provider: this.providerName,
-        statusCode: response.status,
-        responseMessage: 'Gmail message accepted by provider.',
-        messageId: result.id,
-        timestamp,
+        responseMessage: 'Gmail message accepted by the provider.',
+        timestamp: startedAt,
       };
     } catch (error: any) {
       return {
         success: false,
         provider: this.providerName,
-        responseMessage: error?.message || 'Gmail send failed',
-        error: { code: 'GMAIL_CLIENT_ERROR', message: error?.message || 'Gmail send failed' },
-        timestamp,
+        responseMessage: error?.message || 'Gmail send failed.',
+        error: { code: 'GMAIL_SEND_FAILED', message: error?.message || 'Gmail send failed.' },
+        timestamp: startedAt,
       };
     }
   }
