@@ -8,6 +8,7 @@ export interface CreatePCloudAccountDto {
   accountEmail: string;
   provider?: 'pcloud' | 'mock_pcloud';
   accessToken?: string;
+  otpCode?: string;
   dailyLimit?: number;
   folderId?: string;
 }
@@ -28,11 +29,12 @@ export class PCloudAccountsService {
     return { ...safe, hasCredentials: !!credentials && credentials.length > 0 };
   }
 
-  private async loginWithPassword(username: string, password: string): Promise<PCloudLoginResult> {
+  private async loginWithPassword(username: string, password: string, otpCode?: string): Promise<PCloudLoginResult> {
     if (!username || !password) throw new BadRequestException('pCloud email and password are required');
     const hosts = ['https://api.pcloud.com', 'https://eapi.pcloud.com'];
     let lastMessage = 'pCloud authentication failed';
     let lastResult: number | string | undefined;
+    let tfaRequired = false;
 
     for (const apiHost of hosts) {
       const params = new URLSearchParams({
@@ -44,6 +46,8 @@ export class PCloudAccountsService {
         authinactiveexpire: '2678400',
         device: 'AutoWork',
       });
+      if (otpCode?.trim()) params.set('code', otpCode.trim());
+
       try {
         const response = await fetch(`${apiHost}/userinfo`, {
           method: 'POST',
@@ -52,10 +56,15 @@ export class PCloudAccountsService {
         });
         const data = await response.json();
         lastResult = data.result;
+
         if (data.result === 0 && data.auth) {
           return { token: String(data.auth), userInfo: data, apiHost };
         }
+
         lastMessage = data.error || `pCloud authentication failed (${data.result})`;
+        // pCloud can require a TFA code for password login. Some API surfaces
+        // report this as 2297/2012 and affected flows have also returned 1022.
+        if ([2297, 2012, 1022].includes(Number(data.result))) tfaRequired = true;
         console.warn(`[pCloud Auth] ${apiHost} rejected request with result=${String(data.result)} message=${String(data.error || 'unknown error')}`);
       } catch (error: any) {
         lastMessage = error?.message || lastMessage;
@@ -63,6 +72,12 @@ export class PCloudAccountsService {
       }
     }
 
+    if (tfaRequired && !otpCode?.trim()) {
+      throw new BadRequestException('pCloud requires a two-factor authentication code. Enter the current pCloud verification code and try again.');
+    }
+    if (tfaRequired && otpCode?.trim()) {
+      throw new BadRequestException('The supplied pCloud two-factor authentication code was rejected or expired. Generate a fresh code and try again.');
+    }
     if (lastResult !== undefined) {
       throw new BadRequestException(`pCloud authentication failed (result ${String(lastResult)}): ${lastMessage}`);
     }
@@ -134,7 +149,7 @@ export class PCloudAccountsService {
     let apiHost = 'https://api.pcloud.com';
 
     if (!verifyResult.connected) {
-      const login = await this.loginWithPassword(accountEmail, rawCredential);
+      const login = await this.loginWithPassword(accountEmail, rawCredential, dto.otpCode);
       credentialForStorage = login.token;
       apiHost = login.apiHost;
       verifyResult = await adapter.verifyConnection(login.token, apiHost);
