@@ -30,19 +30,38 @@ export class PCloudAccountsService {
   }
 
   /**
+   * Discover pCloud's closest HTTP API server. pCloud documents this endpoint
+   * as unauthenticated and recommends fallback to api.pcloud.com when needed.
+   */
+  private async discoverApiHosts(): Promise<string[]> {
+    const fallback = ['https://api.pcloud.com', 'https://eapi.pcloud.com'];
+    try {
+      const response = await fetch('https://api.pcloud.com/getapiserver');
+      const data = await response.json();
+      if (Number(data.result) !== 0 || !Array.isArray(data.api)) return fallback;
+      const discovered = data.api
+        .filter((host: any) => typeof host === 'string' && host.trim())
+        .map((host: string) => host.startsWith('http') ? host : `https://${host}`);
+      return [...new Set([...discovered, ...fallback])];
+    } catch {
+      return fallback;
+    }
+  }
+
+  /**
    * Authenticate a real pCloud account using pCloud's documented credential
    * login flow. TFA is a second API call: /login returns a challenge token
    * (result 2297), then /tfa_login exchanges that challenge plus the one-time
    * code for the normal auth token.
    *
    * We intentionally do not treat result 1022 as a TFA-login signal. pCloud's
-   * public API documents 1022 as the generic "code required" error used by
-   * several non-login methods; the dedicated login/TFA flow exposes 2297.
+   * public API documents 1022 as a generic code-required error used by several
+   * non-login methods; the dedicated login/TFA flow exposes 2297.
    */
   private async loginWithPassword(username: string, password: string, otpCode?: string): Promise<PCloudLoginResult> {
     if (!username || !password) throw new BadRequestException('pCloud email and password are required');
 
-    const hosts = ['https://api.pcloud.com', 'https://eapi.pcloud.com'];
+    const hosts = await this.discoverApiHosts();
     let lastMessage = 'pCloud authentication failed';
     let lastResult: number | string | undefined;
 
@@ -72,8 +91,6 @@ export class PCloudAccountsService {
           return { token: String(loginData.auth), userInfo: loginData, apiHost };
         }
 
-        // Official pCloud TFA flow: /login returns a challenge token with
-        // result 2297; /tfa_login consumes that token and the current code.
         if (Number(loginData.result) === 2297) {
           const challengeToken = String(loginData.token || '');
           if (!challengeToken) {
@@ -114,9 +131,6 @@ export class PCloudAccountsService {
         lastMessage = loginData.error || `pCloud authentication failed (${loginData.result})`;
         console.warn(`[pCloud Auth] ${apiHost}/login rejected request with result=${String(loginData.result)} message=${String(loginData.error || 'unknown error')}`);
       } catch (error: any) {
-        // Preserve deliberate application errors such as TFA-required/invalid
-        // code; only continue to the alternate regional host for ordinary API
-        // authentication/network failures.
         if (error instanceof BadRequestException) throw error;
         lastMessage = error?.message || lastMessage;
         console.warn(`[pCloud Auth] ${apiHost}/login request failed: ${lastMessage}`);
