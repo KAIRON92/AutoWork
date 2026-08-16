@@ -53,6 +53,30 @@ export class AuthService {
     };
   }
 
+  async getCurrentUser(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { organization: true, role: true },
+    });
+    if (!user) throw new UnauthorizedException('Authenticated user no longer exists');
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        organizationId: user.organizationId,
+        role: user.role?.name || 'MEMBER',
+      },
+      organization: {
+        id: user.organization.id,
+        name: user.organization.name,
+        slug: user.organization.slug,
+      },
+    };
+  }
+
   async register(data: { email: string; password: string; firstName: string; lastName: string; organizationName: string }) {
     const email = data.email.toLowerCase().trim();
     const existing = await this.prisma.user.findUnique({ where: { email } });
