@@ -29,15 +29,25 @@ export class PCloudAccountsService {
     return { ...safe, hasCredentials: !!credentials && credentials.length > 0 };
   }
 
+  /**
+   * Authenticate a real pCloud account using pCloud's documented credential
+   * login flow. TFA is a second API call: /login returns a challenge token
+   * (result 2297), then /tfa_login exchanges that challenge plus the one-time
+   * code for the normal auth token.
+   *
+   * We intentionally do not treat result 1022 as a TFA-login signal. pCloud's
+   * public API documents 1022 as the generic "code required" error used by
+   * several non-login methods; the dedicated login/TFA flow exposes 2297.
+   */
   private async loginWithPassword(username: string, password: string, otpCode?: string): Promise<PCloudLoginResult> {
     if (!username || !password) throw new BadRequestException('pCloud email and password are required');
+
     const hosts = ['https://api.pcloud.com', 'https://eapi.pcloud.com'];
     let lastMessage = 'pCloud authentication failed';
     let lastResult: number | string | undefined;
-    let tfaRequired = false;
 
     for (const apiHost of hosts) {
-      const params = new URLSearchParams({
+      const baseParams = new URLSearchParams({
         username,
         password,
         getauth: '1',
@@ -45,39 +55,74 @@ export class PCloudAccountsService {
         authexpire: '31536000',
         authinactiveexpire: '2678400',
         device: 'AutoWork',
+        deviceid: 'AutoWork',
+        os: process.platform === 'win32' ? '5' : process.platform === 'darwin' ? '6' : process.platform === 'linux' ? '7' : '0',
       });
-      if (otpCode?.trim()) params.set('code', otpCode.trim());
 
       try {
-        const response = await fetch(`${apiHost}/userinfo`, {
+        const loginResponse = await fetch(`${apiHost}/login`, {
           method: 'POST',
           headers: { 'content-type': 'application/x-www-form-urlencoded' },
-          body: params.toString(),
+          body: baseParams.toString(),
         });
-        const data = await response.json();
-        lastResult = data.result;
+        const loginData = await loginResponse.json();
+        lastResult = loginData.result;
 
-        if (data.result === 0 && data.auth) {
-          return { token: String(data.auth), userInfo: data, apiHost };
+        if (loginData.result === 0 && loginData.auth) {
+          return { token: String(loginData.auth), userInfo: loginData, apiHost };
         }
 
-        lastMessage = data.error || `pCloud authentication failed (${data.result})`;
-        // pCloud can require a TFA code for password login. Some API surfaces
-        // report this as 2297/2012 and affected flows have also returned 1022.
-        if ([2297, 2012, 1022].includes(Number(data.result))) tfaRequired = true;
-        console.warn(`[pCloud Auth] ${apiHost} rejected request with result=${String(data.result)} message=${String(data.error || 'unknown error')}`);
+        // Official pCloud TFA flow: /login returns a challenge token with
+        // result 2297; /tfa_login consumes that token and the current code.
+        if (Number(loginData.result) === 2297) {
+          const challengeToken = String(loginData.token || '');
+          if (!challengeToken) {
+            throw new BadRequestException('pCloud requires two-factor authentication, but no TFA challenge token was returned.');
+          }
+          if (!otpCode?.trim()) {
+            throw new BadRequestException('pCloud requires a two-factor authentication code. Enter the current pCloud verification code and try again.');
+          }
+
+          const tfaParams = new URLSearchParams({
+            token: challengeToken,
+            code: otpCode.trim(),
+            getauth: '1',
+            logout: '1',
+            trustdevice: '1',
+            device: 'AutoWork',
+            deviceid: 'AutoWork',
+            os: process.platform === 'win32' ? '5' : process.platform === 'darwin' ? '6' : process.platform === 'linux' ? '7' : '0',
+          });
+          const tfaResponse = await fetch(`${apiHost}/tfa_login`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            body: tfaParams.toString(),
+          });
+          const tfaData = await tfaResponse.json();
+
+          if (tfaData.result === 0 && tfaData.auth) {
+            return { token: String(tfaData.auth), userInfo: tfaData, apiHost };
+          }
+
+          if ([2012, 2064].includes(Number(tfaData.result))) {
+            throw new BadRequestException('The supplied pCloud two-factor authentication code was rejected or expired. Generate a fresh code and try again.');
+          }
+
+          throw new BadRequestException(`pCloud two-factor authentication failed (result ${String(tfaData.result)}): ${String(tfaData.error || 'unknown error')}`);
+        }
+
+        lastMessage = loginData.error || `pCloud authentication failed (${loginData.result})`;
+        console.warn(`[pCloud Auth] ${apiHost}/login rejected request with result=${String(loginData.result)} message=${String(loginData.error || 'unknown error')}`);
       } catch (error: any) {
+        // Preserve deliberate application errors such as TFA-required/invalid
+        // code; only continue to the alternate regional host for ordinary API
+        // authentication/network failures.
+        if (error instanceof BadRequestException) throw error;
         lastMessage = error?.message || lastMessage;
-        console.warn(`[pCloud Auth] ${apiHost} request failed: ${lastMessage}`);
+        console.warn(`[pCloud Auth] ${apiHost}/login request failed: ${lastMessage}`);
       }
     }
 
-    if (tfaRequired && !otpCode?.trim()) {
-      throw new BadRequestException('pCloud requires a two-factor authentication code. Enter the current pCloud verification code and try again.');
-    }
-    if (tfaRequired && otpCode?.trim()) {
-      throw new BadRequestException('The supplied pCloud two-factor authentication code was rejected or expired. Generate a fresh code and try again.');
-    }
     if (lastResult !== undefined) {
       throw new BadRequestException(`pCloud authentication failed (result ${String(lastResult)}): ${lastMessage}`);
     }
