@@ -2,7 +2,7 @@ name: AutoWork CI
 
 on:
   push:
-    branches: [main, final-hardening]
+    branches: [main, final-hardening, fix/real-acceptance-pcloud-email]
   pull_request:
     branches: [main]
 
