@@ -14,10 +14,13 @@ interface GmailCredentials {
   accountEmail?: string;
 }
 
+<<<<<<< HEAD
 function jsonErrorMessage(value: any): string {
   return value?.error?.message || value?.error_description || value?.error || 'Gmail API request failed';
 }
 
+=======
+>>>>>>> origin/main
 export class GmailAdapter implements IEmailAdapter {
   readonly providerName = 'gmail';
 
@@ -47,7 +50,11 @@ export class GmailAdapter implements IEmailAdapter {
 
     const payload = await response.json();
     if (!response.ok || !payload.access_token) {
+<<<<<<< HEAD
       throw new Error(jsonErrorMessage(payload));
+=======
+      throw new Error(payload.error_description || payload.error || 'Gmail access token refresh failed');
+>>>>>>> origin/main
     }
 
     return {
@@ -74,7 +81,11 @@ export class GmailAdapter implements IEmailAdapter {
       if (!response.ok || !payload.emailAddress) {
         return {
           valid: false,
+<<<<<<< HEAD
           message: jsonErrorMessage(payload),
+=======
+          message: payload.error?.message || 'Unable to verify Gmail mailbox.',
+>>>>>>> origin/main
           accountEmail: String(credentials.accountEmail || ''),
         };
       }
@@ -145,7 +156,11 @@ export class GmailAdapter implements IEmailAdapter {
       });
       const result = await response.json();
       if (!response.ok || !result.id) {
+<<<<<<< HEAD
         throw new Error(jsonErrorMessage(result));
+=======
+        throw new Error(result.error?.message || 'Gmail send failed');
+>>>>>>> origin/main
       }
 
       return {
