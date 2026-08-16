@@ -86,6 +86,6 @@ export class AuthController {
   @Get('me')
   @ApiOperation({ summary: 'Get current logged in user and tenant profile' })
   async getProfile(@Request() req: any) {
-    return { user: req.user };
+    return this.authService.getCurrentUser(String(req.user?.sub || ''));
   }
 }
