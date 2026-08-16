@@ -12,6 +12,7 @@ export const accountsService = {
     accountEmail: string;
     provider?: 'pcloud' | 'mock_pcloud';
     accessToken?: string;
+    otpCode?: string;
     dailyLimit?: number;
   }): Promise<PCloudAccount> {
     const res = await apiClient.post('/v1/pcloud/accounts', data);
