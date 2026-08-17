@@ -268,7 +268,7 @@ export class PCloudClient {
             recipientEmail: options.recipientEmail,
             descriptionSnapshot: options.message,
             pcloudAccountId: options.pcloudAccountId || 'default',
-            pcloudFileId: options.fileId || targetFolderId,
+            pcloudFileId: options.fileId || targetFolderId || '0',
             timestamp: new Date().toISOString(),
           };
         }
@@ -278,9 +278,9 @@ export class PCloudClient {
         success: false,
         operationType: 'sharefolder',
         recipientEmail: options.recipientEmail,
-        descriptionSnapshot: options.message,
+        descriptionSnapshot: options.message || undefined,
         pcloudAccountId: options.pcloudAccountId || 'default',
-        pcloudFileId: options.fileId || targetFolderId,
+        pcloudFileId: options.fileId || targetFolderId || '0',
         error,
         timestamp: new Date().toISOString(),
       };
@@ -290,16 +290,16 @@ export class PCloudClient {
         success: false,
         operationType: 'sharefolder',
         recipientEmail: options.recipientEmail,
-        descriptionSnapshot: options.message,
+        descriptionSnapshot: options.message || undefined,
         pcloudAccountId: options.pcloudAccountId || 'default',
-        pcloudFileId: options.fileId || targetFolderId,
+        pcloudFileId: options.fileId || targetFolderId || '0',
         error,
         timestamp: new Date().toISOString(),
       };
     }
   }
 
-  private async downloadFileBuffer(fileId: string, accessToken: string, apiHost?: string): Promise<{ buffer: Buffer; name: string; mimeType: string }> {
+  async downloadFileBuffer(fileId: string, accessToken: string, apiHost?: string): Promise<{ buffer: Buffer; name: string; mimeType: string }> {
     let host = this.getHost(apiHost);
     const metadata = await this.getFileMetadata(fileId, accessToken, apiHost);
     if (metadata.isFolder) throw new Error('uploadtransfer requires a file, not a folder');
@@ -337,9 +337,9 @@ export class PCloudClient {
           operationType: 'uploadtransfer',
           pcloudReferenceId: data.progresshash || data.transferid || `transfer-${Date.now()}`,
           recipientEmail,
-          descriptionSnapshot: options.message,
+          descriptionSnapshot: options.message || undefined,
           pcloudAccountId: options.pcloudAccountId || 'default',
-          pcloudFileId: options.fileId,
+          pcloudFileId: options.fileId || '0',
           timestamp: new Date().toISOString(),
         };
       }
@@ -358,9 +358,9 @@ export class PCloudClient {
             operationType: 'uploadtransfer',
             pcloudReferenceId: altData.progresshash || altData.transferid || `transfer-${Date.now()}`,
             recipientEmail,
-            descriptionSnapshot: options.message,
+            descriptionSnapshot: options.message || undefined,
             pcloudAccountId: options.pcloudAccountId || 'default',
-            pcloudFileId: options.fileId,
+            pcloudFileId: options.fileId || '0',
             timestamp: new Date().toISOString(),
           };
         }
@@ -370,9 +370,9 @@ export class PCloudClient {
         success: false,
         operationType: 'uploadtransfer',
         recipientEmail,
-        descriptionSnapshot: options.message,
+        descriptionSnapshot: options.message || undefined,
         pcloudAccountId: options.pcloudAccountId || 'default',
-        pcloudFileId: options.fileId,
+        pcloudFileId: options.fileId || '0',
         error,
         timestamp: new Date().toISOString(),
       };
@@ -382,7 +382,7 @@ export class PCloudClient {
         success: false,
         operationType: 'uploadtransfer',
         recipientEmail,
-        descriptionSnapshot: options.message,
+        descriptionSnapshot: options.message || undefined,
         pcloudAccountId: options.pcloudAccountId || 'default',
         pcloudFileId: options.fileId || '0',
         error,

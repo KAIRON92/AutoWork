@@ -47,29 +47,29 @@ export interface PCloudItemMetadata {
 }
 
 export interface PCloudShareOptions {
-  folderId?: string;
-  fileId?: string;
+  folderId?: string | null;
+  fileId?: string | null;
   recipientEmail: string;
-  message?: string;
+  message?: string | null;
   permissions?: number;
   pcloudAccountId?: string;
   organizationId?: string;
   campaignId?: string;
-  jobId?: string;
+  jobId?: string | null;
 }
 
 export interface PCloudTransferOptions {
-  fileId?: string;
-  folderId?: string;
-  filename?: string;
-  mimeType?: string;
+  fileId?: string | null;
+  folderId?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
   senderEmail: string;
   recipientEmails: string[];
-  message?: string;
+  message?: string | null;
   pcloudAccountId?: string;
   organizationId?: string;
   campaignId?: string;
-  jobId?: string;
+  jobId?: string | null;
 }
 
 export interface PCloudShareResult {
@@ -89,6 +89,7 @@ export interface IPCloudAdapter {
   verifyConnection(accessToken: string, apiHost?: string): Promise<{ connected: boolean; userInfo?: PCloudUserInfo; message: string }>;
   listContents(folderId: string, accessToken: string, apiHost?: string): Promise<PCloudItemMetadata[]>;
   getFileMetadata(fileId: string, accessToken: string, apiHost?: string): Promise<PCloudItemMetadata>;
+  downloadFileBuffer(fileId: string, accessToken: string, apiHost?: string): Promise<{ buffer: Buffer; name: string; mimeType: string }>;
   uploadFile(options: { filename: string; buffer: Buffer; mimeType: string; folderId?: string; accessToken: string; apiHost?: string }): Promise<PCloudItemMetadata>;
   shareFolder(options: PCloudShareOptions, accessToken: string, apiHost?: string): Promise<PCloudShareResult>;
   createTransfer(options: PCloudTransferOptions, accessToken: string, apiHost?: string): Promise<PCloudShareResult>;
