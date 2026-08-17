@@ -1,8 +1,21 @@
-import { BadRequestException, Controller, Delete, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { Roles } from '../auth/roles.decorator';
-import { EmailService } from './email.service';
+import { RolesGuard } from '../auth/roles.guard';
+import { EmailService, CreateCustomSmtpDto } from './email.service';
 
 function context(req: any): { orgId: string; userId: string } {
   const orgId = req.user?.orgId;
@@ -13,18 +26,28 @@ function context(req: any): { orgId: string; userId: string } {
 
 @ApiTags('Email Accounts')
 @ApiBearerAuth()
+@UseGuards(RolesGuard)
 @Controller('api/v1/email/accounts')
 export class EmailController {
   constructor(private readonly emailService: EmailService) {}
 
   @Get()
+  @Roles('ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'List authenticated sender accounts for current tenant' })
   async list(@Req() req: any) {
     return this.emailService.list(context(req).orgId);
   }
 
+  @Post('smtp')
+  @Roles('ADMIN', 'MEMBER')
+  @ApiOperation({ summary: 'Verify and register a custom authenticated SMTP sender account' })
+  async createSmtp(@Req() req: any, @Body() body: CreateCustomSmtpDto) {
+    const { orgId } = context(req);
+    return this.emailService.createCustomSmtp(orgId, body);
+  }
+
   @Get('gmail/oauth-url')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Create an official Gmail OAuth authorization URL' })
   async gmailOAuthUrl(@Req() req: any) {
     const { orgId, userId } = context(req);
@@ -46,7 +69,7 @@ export class EmailController {
   }
 
   @Post(':id/test')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Send one controlled test email using a verified sender account' })
   async test(@Param('id') id: string, @Req() req: any) {
     const { orgId } = context(req);
@@ -54,10 +77,7 @@ export class EmailController {
     const subject = String(req.body?.subject || 'AutoWork sender verification').trim();
     const body = String(req.body?.body || 'AutoWork controlled sender verification message.').trim();
     if (!to || !to.includes('@')) throw new BadRequestException('A valid test recipient email is required');
-    const account = (await this.emailService.list(orgId)).find((item: any) => item.id === id);
-    if (!account) throw new BadRequestException('Sender account not found');
-    if (account.provider !== 'gmail') throw new BadRequestException(`Controlled test is not implemented for provider ${account.provider}`);
-    return this.emailService.sendGmail(id, orgId, { to, subject, body });
+    return this.emailService.sendEmail(id, orgId, { to, subject, body });
   }
 
   @Delete(':id')

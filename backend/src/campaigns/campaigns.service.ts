@@ -7,9 +7,13 @@ export interface CreateCampaignDto {
   pcloudAccountId: string;
   pcloudFileId: string;
   templateId: string;
+  emailAccountId?: string;
   contactListId?: string;
   recipientContactIds?: string[];
   config?: {
+    deliveryMode?: 'EMAIL' | 'PCLOUD_NATIVE';
+    attachmentMode?: 'ATTACHMENT' | 'DIRECT_LINK' | 'BOTH';
+    subject?: string;
     shareType?: 'sharefolder' | 'uploadtransfer';
     rateLimitPerMinute?: number;
     retryCount?: number;
@@ -24,7 +28,8 @@ export class CampaignsService {
     return this.prisma.campaign.findMany({
       where: { organizationId },
       include: {
-        pcloudAccount: { select: { id: true, name: true, accountEmail: true, provider: true } },
+        emailAccount: { select: { id: true, displayName: true, accountEmail: true, provider: true, status: true } },
+        pcloudAccount: { select: { id: true, name: true, accountEmail: true, provider: true, status: true } },
         pcloudFile: { select: { id: true, name: true, fileId: true, pcloudPath: true } },
         template: { select: { id: true, name: true } },
         contactList: { select: { id: true, name: true } },
@@ -38,6 +43,7 @@ export class CampaignsService {
     const campaign = await this.prisma.campaign.findFirst({
       where: { id, organizationId },
       include: {
+        emailAccount: true,
         pcloudAccount: true,
         pcloudFile: true,
         template: true,
@@ -51,15 +57,30 @@ export class CampaignsService {
   }
 
   async create(organizationId: string, dto: CreateCampaignDto) {
-    const [account, file, template] = await Promise.all([
+    const deliveryMode: 'EMAIL' | 'PCLOUD_NATIVE' = dto.config?.deliveryMode || (dto.emailAccountId ? 'EMAIL' : 'EMAIL');
+
+    const [pcloudAccount, file, template] = await Promise.all([
       this.prisma.pCloudAccount.findFirst({ where: { id: dto.pcloudAccountId, organizationId } }),
       this.prisma.pCloudFile.findFirst({ where: { id: dto.pcloudFileId, organizationId } }),
       this.prisma.template.findFirst({ where: { id: dto.templateId, organizationId } }),
     ]);
 
-    if (!account) throw new BadRequestException(`Invalid pCloud Account ${dto.pcloudAccountId}`);
+    if (!pcloudAccount) throw new BadRequestException(`Invalid pCloud Account ${dto.pcloudAccountId}`);
     if (!file) throw new BadRequestException(`Invalid pCloud File ${dto.pcloudFileId}`);
     if (!template) throw new BadRequestException(`Invalid Template ${dto.templateId}`);
+
+    let emailAccount = null;
+    if (deliveryMode === 'EMAIL') {
+      if (!dto.emailAccountId) {
+        throw new BadRequestException('A verified Email sender account is required for Email delivery mode.');
+      }
+      emailAccount = await this.prisma.emailAccount.findFirst({
+        where: { id: dto.emailAccountId, organizationId, status: 'VERIFIED' },
+      });
+      if (!emailAccount) {
+        throw new BadRequestException(`Invalid or unverified Email sender account ${dto.emailAccountId}`);
+      }
+    }
 
     let contactIds: { id: string; email: string }[] = [];
     if (dto.contactListId) {
@@ -81,16 +102,19 @@ export class CampaignsService {
     }
 
     const config = {
-      shareType: 'uploadtransfer' as const,
-      rateLimitPerMinute: 60,
-      retryCount: 3,
-      ...(dto.config || {}),
+      deliveryMode,
+      attachmentMode: dto.config?.attachmentMode || 'ATTACHMENT',
+      subject: dto.config?.subject || dto.name,
+      shareType: dto.config?.shareType || 'uploadtransfer',
+      rateLimitPerMinute: dto.config?.rateLimitPerMinute || 60,
+      retryCount: dto.config?.retryCount || 3,
     };
 
     const campaign = await this.prisma.campaign.create({
       data: {
         organizationId,
         name: dto.name,
+        emailAccountId: emailAccount ? emailAccount.id : null,
         pcloudAccountId: dto.pcloudAccountId,
         pcloudFileId: dto.pcloudFileId,
         templateId: dto.templateId,
@@ -106,7 +130,12 @@ export class CampaignsService {
 
     if (contactIds.length > 0) {
       await this.prisma.campaignRecipient.createMany({
-        data: contactIds.map((c) => ({ campaignId: campaign.id, contactId: c.id, recipientEmail: c.email, status: 'PENDING' })),
+        data: contactIds.map((c) => ({
+          campaignId: campaign.id,
+          contactId: c.id,
+          recipientEmail: c.email,
+          status: 'PENDING',
+        })),
       });
     }
 
@@ -118,18 +147,28 @@ export class CampaignsService {
 
     const campaign = await this.prisma.campaign.findFirst({
       where: { id, organizationId },
-      include: { pcloudAccount: true, pcloudFile: true, template: true, recipients: true },
+      include: { emailAccount: true, pcloudAccount: true, pcloudFile: true, template: true, recipients: true },
     });
     if (!campaign) throw new NotFoundException(`Campaign ${id} not found`);
     if (!['DRAFT', 'PAUSED'].includes(campaign.status)) {
       throw new BadRequestException(`Campaign cannot be launched from ${campaign.status} state`);
     }
     if (campaign.recipients.length === 0) throw new BadRequestException('Cannot launch campaign with 0 recipients');
-    if (campaign.pcloudAccount.status !== 'ACTIVE') throw new BadRequestException('Selected pCloud account is not active');
 
-    const config = campaign.config ? JSON.parse(campaign.config) : { shareType: 'uploadtransfer' };
-    if (config.shareType !== 'uploadtransfer' && config.shareType !== 'sharefolder') {
-      throw new BadRequestException(`Unsupported pCloud operation: ${config.shareType}`);
+    const config = campaign.config ? JSON.parse(campaign.config) : {};
+    const deliveryMode = config.deliveryMode || (campaign.emailAccountId ? 'EMAIL' : 'PCLOUD_NATIVE');
+
+    if (deliveryMode === 'EMAIL') {
+      if (!campaign.emailAccount || campaign.emailAccount.status !== 'VERIFIED') {
+        throw new BadRequestException('Campaign sender email account is not verified or inactive.');
+      }
+    } else {
+      if (campaign.pcloudAccount.status !== 'ACTIVE') {
+        throw new BadRequestException('Selected pCloud account is not active.');
+      }
+      if (config.shareType && config.shareType !== 'uploadtransfer' && config.shareType !== 'sharefolder') {
+        throw new BadRequestException(`Unsupported pCloud operation: ${config.shareType}`);
+      }
     }
 
     try {
@@ -139,7 +178,11 @@ export class CampaignsService {
         pcloudAccountId: campaign.pcloudAccountId,
         pcloudFileId: campaign.pcloudFileId,
         templateId: campaign.templateId,
-        operationType: config.shareType,
+        emailAccountId: campaign.emailAccountId || undefined,
+        deliveryMode,
+        attachmentMode: config.attachmentMode || 'ATTACHMENT',
+        subject: config.subject || campaign.name,
+        operationType: config.shareType || 'uploadtransfer',
         retryCount: config.retryCount || 3,
       });
 
@@ -151,8 +194,9 @@ export class CampaignsService {
     }
 
     return {
-      message: 'Campaign queued for pCloud processing',
+      message: `Campaign queued for ${deliveryMode === 'EMAIL' ? 'Email distribution' : 'pCloud Native'} processing`,
       campaignId: campaign.id,
+      deliveryMode,
       status: 'QUEUED',
       totalRecipients: campaign.recipients.length,
     };

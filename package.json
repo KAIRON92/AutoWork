@@ -1,8 +1,10 @@
 {
   "devDependencies": {
+    "@types/nodemailer": "^8.0.1",
     "prisma": "^5.22.0"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0"
+    "@prisma/client": "^5.22.0",
+    "nodemailer": "^9.0.5"
   }
 }
