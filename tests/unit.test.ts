@@ -92,6 +92,12 @@ describe('Autowork.com pCloud Architecture Unit Tests', () => {
       expect(error.code).toBe(PCloudErrorCode.PCLOUD_FILE_NOT_FOUND);
       expect(error.isTransient).toBe(false);
     });
+
+    it('should map wrong region code 2321 to PCLOUD_WRONG_REGION as transient/retryable', () => {
+      const error = PCloudErrorMapper.mapRawError(2321, 'Wrong region server');
+      expect(error.code).toBe(PCloudErrorCode.PCLOUD_WRONG_REGION);
+      expect(error.isTransient).toBe(true);
+    });
   });
 
   describe('4. Mock pCloud Provider Simulation & History Tracking', () => {

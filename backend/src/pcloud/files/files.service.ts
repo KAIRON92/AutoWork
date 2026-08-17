@@ -27,9 +27,9 @@ export class PCloudFilesService {
 
   async listFolder(organizationId: string, accountId?: string, folderId: string = '0') {
     const account = await this.resolveAccount(organizationId, accountId);
-    const token = await this.accountsService.getAccountCredentials(account.id, organizationId);
+    const { credential: token, apiHost } = await this.accountsService.getAccountCredentials(account.id, organizationId);
     const adapter = PCloudAdapterFactory.getAdapter(account.provider);
-    return await adapter.listContents(folderId, token, account.apiHost || undefined);
+    return await adapter.listContents(folderId, token, apiHost || undefined);
   }
 
   async findAllStoredFiles(organizationId: string) {
@@ -56,7 +56,7 @@ export class PCloudFilesService {
     folderId: string = '0',
   ) {
     const account = await this.resolveAccount(organizationId, accountId);
-    const token = await this.accountsService.getAccountCredentials(account.id, organizationId);
+    const { credential: token, apiHost } = await this.accountsService.getAccountCredentials(account.id, organizationId);
     const adapter = PCloudAdapterFactory.getAdapter(account.provider);
 
     const uploadedMeta: PCloudItemMetadata = await adapter.uploadFile({
@@ -65,7 +65,7 @@ export class PCloudFilesService {
       mimeType: file.mimetype,
       folderId,
       accessToken: token,
-      apiHost: account.apiHost || undefined,
+      apiHost: apiHost || undefined,
     });
 
     return this.prisma.pCloudFile.create({

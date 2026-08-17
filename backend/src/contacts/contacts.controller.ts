@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ContactsService, CreateContactDto } from './contacts.service';
+import { Roles } from '../auth/roles.decorator';
 
 function currentOrgId(req: any): string {
   const orgId = req.user?.orgId;
@@ -38,18 +39,21 @@ export class ContactsController {
   }
 
   @Post('contacts')
+  @Roles('ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Create a new contact' })
   async createContact(@Body() dto: CreateContactDto, @Request() req: any) {
     return this.contactsService.createContact(currentOrgId(req), dto);
   }
 
   @Put('contacts/:id')
+  @Roles('ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Update contact details' })
   async updateContact(@Param('id') id: string, @Body() dto: Partial<CreateContactDto>, @Request() req: any) {
     return this.contactsService.updateContact(id, currentOrgId(req), dto);
   }
 
   @Delete('contacts/:id')
+  @Roles('ADMIN')
   @ApiOperation({ summary: 'Delete contact' })
   async removeContact(@Param('id') id: string, @Request() req: any) {
     return this.contactsService.removeContact(id, currentOrgId(req));
@@ -68,12 +72,14 @@ export class ContactsController {
   }
 
   @Post('contact-lists')
+  @Roles('ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Create a new contact list' })
   async createList(@Body() body: { name: string; description?: string }, @Request() req: any) {
     return this.contactsService.createList(currentOrgId(req), body.name, body.description);
   }
 
   @Delete('contact-lists/:id')
+  @Roles('ADMIN')
   @ApiOperation({ summary: 'Delete a contact list' })
   async removeList(@Param('id') id: string, @Request() req: any) {
     return this.contactsService.removeList(id, currentOrgId(req));

@@ -154,16 +154,16 @@ export class PCloudAccountsService {
     return this.sanitizeAccount(account);
   }
 
-  async getAccountCredentials(id: string, organizationId: string): Promise<string> {
+  async getAccountCredentials(id: string, organizationId: string): Promise<{ credential: string; apiHost: string | null }> {
     const account = await this.prisma.pCloudAccount.findFirst({ where: { id, organizationId } });
     if (!account) throw new NotFoundException(`pCloud Account ${id} not found`);
     if (account.provider === 'mock_pcloud') {
       if (process.env.PCLOUD_ALLOW_MOCK !== 'true') {
         throw new BadRequestException('Mock pCloud accounts are disabled.');
       }
-      return account.credentials;
+      return { credential: account.credentials, apiHost: account.apiHost };
     }
-    return decryptPCloudCredential(account.credentials);
+    return { credential: decryptPCloudCredential(account.credentials), apiHost: account.apiHost };
   }
 
   async create(organizationId: string, dto: CreatePCloudAccountDto) {

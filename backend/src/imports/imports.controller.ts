@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ImportsService, ParseImportPayload, ColumnMappingPayload, ConfirmImportPayload } from './imports.service';
+import { Roles } from '../auth/roles.decorator';
 
 function currentOrgId(req: any): string {
   const orgId = req.user?.orgId;
@@ -35,18 +36,21 @@ export class ImportsController {
   }
 
   @Post('parse')
+  @Roles('ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Parse uploaded CSV/TXT file and auto-detect columns' })
   async parseFile(@Body() payload: ParseImportPayload) {
     return this.importsService.parseFile(payload);
   }
 
   @Post('validate')
+  @Roles('ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Validate mapped columns against rows, checking format and duplicates' })
   async validateMapping(@Body() mapping: ColumnMappingPayload, @Request() req: any) {
     return this.importsService.validateMapping(currentOrgId(req), mapping);
   }
 
   @Post('confirm')
+  @Roles('ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Confirm import and create contacts and optional contact list' })
   async confirmImport(@Body() payload: ConfirmImportPayload, @Request() req: any) {
     return this.importsService.confirmImport(currentOrgId(req), payload);

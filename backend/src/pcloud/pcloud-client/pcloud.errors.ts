@@ -27,6 +27,8 @@ export class PCloudErrorMapper {
         return { code: PCloudErrorCode.PCLOUD_VERIFICATION_REQUIRED, rawCode: rawResult, message: `pCloud Verification Required: ${msg}`, isTransient: false, timestamp: new Date().toISOString() };
       case 2088:
         return { code: PCloudErrorCode.PCLOUD_FILE_SHARE_UNSUPPORTED, rawCode: rawResult, message: `pCloud transfer requires an uploaded file payload: ${msg}`, isTransient: false, timestamp: new Date().toISOString() };
+      case 2321:
+        return { code: PCloudErrorCode.PCLOUD_WRONG_REGION, rawCode: rawResult, message: `pCloud wrong region — the API host does not match this account's data location. Re-discover the correct host: ${msg}`, isTransient: true, timestamp: new Date().toISOString() };
       case 4000:
         return { code: PCloudErrorCode.PCLOUD_RATE_LIMITED, rawCode: rawResult, message: `pCloud Rate Limit Exceeded: ${msg}`, isTransient: true, timestamp: new Date().toISOString() };
       case 2041:
