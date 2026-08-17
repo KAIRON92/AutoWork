@@ -29,6 +29,7 @@ export interface PCloudUserInfo {
   freeQuota: number;
   emailVerified: boolean;
   registered: string;
+  resolvedApiHost?: string;
 }
 
 export interface PCloudItemMetadata {

@@ -246,9 +246,14 @@ export class PCloudAccountsService {
     const credential = account.provider === 'mock_pcloud' ? account.credentials : decryptPCloudCredential(account.credentials);
     const adapter = PCloudAdapterFactory.getAdapter(account.provider);
     const result = await adapter.verifyConnection(credential, account.apiHost || undefined);
+    const updatedApiHost = result.userInfo?.resolvedApiHost || account.apiHost;
     await this.prisma.pCloudAccount.update({
       where: { id },
-      data: { status: result.connected ? 'ACTIVE' : 'ERROR', lastUsedAt: result.connected ? new Date() : account.lastUsedAt },
+      data: {
+        status: result.connected ? 'ACTIVE' : 'ERROR',
+        apiHost: updatedApiHost,
+        lastUsedAt: result.connected ? new Date() : account.lastUsedAt,
+      },
     });
     return result;
   }
