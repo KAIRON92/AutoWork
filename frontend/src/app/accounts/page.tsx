@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Shell } from '@/components/layout/shell';
 import { accountsService } from '@/services/accountsService';
 import { PCloudAccount } from '@/types';
-import { Cloud, Plus, CheckCircle2, PauseCircle, Trash2, ShieldCheck, Check, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { Cloud, Plus, CheckCircle2, PauseCircle, Trash2, ShieldCheck, Check, RefreshCw, Eye, EyeOff, KeyRound, AlertTriangle, ExternalLink, Sparkles } from 'lucide-react';
 
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<PCloudAccount[]>([]);
@@ -15,10 +15,13 @@ export default function AccountsPage() {
   const [name, setName] = useState('');
   const [accountEmail, setAccountEmail] = useState('');
   const [accessToken, setAccessToken] = useState('');
-  const [otpCode, setOtpCode] = useState('');
   const [showCredential, setShowCredential] = useState(false);
   const [dailyLimit, setDailyLimit] = useState(500);
   const [formError, setFormError] = useState('');
+  const [oauthLoading, setOauthLoading] = useState(false);
+  const [oauthBanner, setOauthBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [accessTokenRequired, setAccessTokenRequired] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const fetchAccounts = async () => {
     try {
@@ -31,7 +34,47 @@ export default function AccountsPage() {
     }
   };
 
-  useEffect(() => { fetchAccounts(); }, []);
+  useEffect(() => {
+    fetchAccounts();
+
+    // Check for OAuth redirect query parameters in URL
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const connected = params.get('connected');
+      const error = params.get('error');
+      if (connected === 'pcloud') {
+        setOauthBanner({
+          type: 'success',
+          message: 'pCloud account successfully connected via OAuth 2.0 Code Flow! Credentials are encrypted at rest.',
+        });
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (error) {
+        setOauthBanner({
+          type: 'error',
+          message: `pCloud OAuth connection failed: ${decodeURIComponent(error)}`,
+        });
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+  }, []);
+
+  const handleOAuthConnect = async () => {
+    try {
+      setOauthLoading(true);
+      setFormError('');
+      const { url } = await accountsService.getOAuthUrl();
+      if (url) {
+        window.location.href = url;
+      } else {
+        setFormError('Failed to generate pCloud OAuth authorization URL.');
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Failed to start pCloud OAuth';
+      setFormError(msg);
+    } finally {
+      setOauthLoading(false);
+    }
+  };
 
   const handleToggle = async (id: string) => {
     try {
@@ -62,28 +105,41 @@ export default function AccountsPage() {
     e.preventDefault();
     setFormError('');
     if (!name || !accountEmail || !accessToken) {
-      setFormError('Account name, registered email, and pCloud credential are required.');
+      setFormError('Account name, registered email, and pCloud access token are required.');
       return;
     }
     try {
+      setSubmitting(true);
       const newAcc = await accountsService.create({
         name,
         accountEmail,
         provider: 'pcloud',
         accessToken,
         dailyLimit: Number(dailyLimit),
-        ...(otpCode.trim() ? { otpCode: otpCode.trim() } : {}),
-      } as any);
+      });
       setAccounts((prev) => [newAcc, ...prev]);
-      setIsModalOpen(false);
-      setName('');
-      setAccountEmail('');
-      setAccessToken('');
-      setOtpCode('');
-      setShowCredential(false);
+      resetModal();
     } catch (err: any) {
-      setFormError(err.response?.data?.message || err.message || 'Connection failed');
+      const data = err.response?.data;
+      if (data?.accessTokenRequired || data?.error === 'PCLOUD_ACCESS_TOKEN_REQUIRED') {
+        setAccessTokenRequired(true);
+        setFormError(data.message || 'pCloud requires an access token. Password login is blocked by pCloud security policy.');
+      } else {
+        setFormError(data?.message || err.message || 'Connection failed');
+      }
+    } finally {
+      setSubmitting(false);
     }
+  };
+
+  const resetModal = () => {
+    setIsModalOpen(false);
+    setAccessTokenRequired(false);
+    setFormError('');
+    setName('');
+    setAccountEmail('');
+    setAccessToken('');
+    setShowCredential(false);
   };
 
   return (
@@ -97,14 +153,34 @@ export default function AccountsPage() {
             </div>
             <p className="text-sm text-slate-500 mt-1">Connect and manage authenticated production pCloud accounts for file transfers and sharing.</p>
           </div>
-          <button onClick={() => { setFormError(''); setIsModalOpen(true); }} className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold shadow-md flex items-center gap-2"><Plus className="h-4 w-4" />Connect pCloud Account</button>
+          <div className="flex items-center gap-3">
+            <button onClick={handleOAuthConnect} disabled={oauthLoading} className="px-4 py-2.5 rounded-xl bg-linear-to-r from-emerald-600 to-teal-600 text-white text-sm font-semibold shadow-md flex items-center gap-2 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-60">
+              {oauthLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Connect via OAuth 2.0
+            </button>
+            <button onClick={() => { setFormError(''); setAccessTokenRequired(false); setIsModalOpen(true); }} className="px-4 py-2.5 rounded-xl bg-linear-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold shadow-md flex items-center gap-2">
+              <Plus className="h-4 w-4" />Manual Token Connection
+            </button>
+          </div>
         </div>
+
+        {oauthBanner && (
+          <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 text-xs ${oauthBanner.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'}`}>
+            <div className="flex items-center gap-2">
+              {oauthBanner.type === 'success' ? <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" /> : <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />}
+              <span className="font-medium">{oauthBanner.message}</span>
+            </div>
+            <button onClick={() => setOauthBanner(null)} className="text-xs font-bold hover:underline">Dismiss</button>
+          </div>
+        )}
 
         <div className="p-4 rounded-xl bg-cyan-50 border border-cyan-200 text-cyan-950 flex items-start gap-3">
           <ShieldCheck className="h-5 w-5 text-cyan-600 shrink-0 mt-0.5" />
           <div className="text-xs space-y-1">
-            <p className="font-semibold text-sm">Production pCloud connection</p>
-            <p>Only the official pCloud REST API is enabled here. Passwords are used only for the login exchange; the resulting auth token is encrypted at rest and never returned to the browser.</p>
+            <p className="font-semibold text-sm">Official pCloud 2.0 Architecture (Code Flow &amp; Token Mode)</p>
+            <p>
+              AutoWork integrates with pCloud using the official <strong>OAuth 2.0 Code Flow</strong> with server-side token exchange and HMAC-SHA256 signed single-use state protection. Tokens are encrypted at rest with AES-256-GCM.
+            </p>
           </div>
         </div>
 
@@ -135,32 +211,103 @@ export default function AccountsPage() {
           })}
         </div>
 
-        {!loading && accounts.length === 0 && <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">No authenticated pCloud accounts are connected. Connect and verify a real production account before browsing or uploading files.</div>}
+        {!loading && accounts.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-12 text-center space-y-4">
+            <Cloud className="h-12 w-12 text-slate-400 mx-auto" />
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">No pCloud Accounts Connected</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                Connect your pCloud account using official OAuth 2.0 authorization or paste a valid pCloud access token.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button onClick={handleOAuthConnect} disabled={oauthLoading} className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold shadow-xs flex items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5" />
+                Connect via OAuth 2.0
+              </button>
+              <button onClick={() => { setFormError(''); setIsModalOpen(true); }} className="px-4 py-2 rounded-xl bg-white border border-slate-300 text-slate-700 text-xs font-semibold shadow-xs">
+                Manual Token Entry
+              </button>
+            </div>
+          </div>
+        )}
 
-        {isModalOpen && <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"><div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-6">
-          <div className="border-b border-slate-100 pb-4"><h3 className="text-lg font-bold text-slate-900">Connect Production pCloud Account</h3><p className="text-xs text-slate-500">Official pCloud REST API only. Credentials are verified before anything is stored.</p></div>
-          {formError && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{formError}</div>}
-          <form onSubmit={handleCreate} className="space-y-4">
-            <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Account Friendly Name</label><input type="text" required placeholder="e.g. Client Premium Account" value={name} onChange={(e) => setName(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" /></div>
-            <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">pCloud Registered Email</label><input type="email" required placeholder="pcloud-user@yourcompany.com" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" /></div>
-            <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Engine / Adapter Type</label><input readOnly value="Official pCloud REST API (Production)" className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 bg-slate-50 text-slate-700" /></div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">pCloud Access Token or Account Password</label>
-              <div className="relative">
-                <input type={showCredential ? 'text' : 'password'} required placeholder="Paste access token or enter account password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)} autoComplete="new-password" className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 pr-10 font-mono" />
-                <button type="button" onClick={() => setShowCredential((visible) => !visible)} aria-label={showCredential ? 'Hide credential' : 'Show credential'} className="absolute inset-y-0 right-0 px-3 text-slate-500 hover:text-slate-800">{showCredential ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-6 max-h-[90vh] overflow-y-auto">
+              <div className="border-b border-slate-100 pb-4">
+                <h3 className="text-lg font-bold text-slate-900">Connect Production pCloud Account</h3>
+                <p className="text-xs text-slate-500">Authenticate via OAuth 2.0 Code Flow or direct pCloud Access Token.</p>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">For a password, AutoWork exchanges it for a pCloud auth token and does not store the password.</p>
+
+              {/* OAuth Recommendation Callout */}
+              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span className="text-xs font-bold">Recommended: Official OAuth 2.0</span>
+                  </div>
+                  <button onClick={handleOAuthConnect} disabled={oauthLoading} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 hover:bg-emerald-500">
+                    {oauthLoading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
+                    Authorize Now
+                  </button>
+                </div>
+                <p className="text-[11px] text-emerald-800">
+                  Redirects securely to pCloud. Exchanges the authorization code on the server and stores the encrypted bearer token.
+                </p>
+              </div>
+
+              <div className="relative flex py-1 items-center">
+                <div className="grow border-t border-slate-200"></div>
+                <span className="shrink mx-3 text-[11px] font-semibold text-slate-400 uppercase">Or Connect with Access Token</span>
+                <div className="grow border-t border-slate-200"></div>
+              </div>
+
+              {formError && !accessTokenRequired && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{formError}</div>}
+
+              {accessTokenRequired && (
+                <div className="rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <KeyRound className="h-5 w-5 text-amber-600 shrink-0" />
+                    <span className="text-sm font-bold text-amber-900">Access Token Required</span>
+                  </div>
+                  <p className="text-xs text-amber-800">
+                    pCloud policy blocks password-based REST login on this account. Connect using an OAuth access token or the OAuth 2.0 button above.
+                  </p>
+                </div>
+              )}
+
+              <form onSubmit={handleCreate} className="space-y-4">
+                <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Account Friendly Name</label><input type="text" required placeholder="e.g. Client Premium Account" value={name} onChange={(e) => setName(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" disabled={submitting} /></div>
+                <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">pCloud Registered Email</label><input type="email" required placeholder="pcloud-user@yourcompany.com" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" disabled={submitting} /></div>
+                <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Engine / Adapter Type</label><input readOnly value="Official pCloud REST API (Production)" className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 bg-slate-50 text-slate-700" /></div>
+                <div className={`rounded-lg transition-all ${accessTokenRequired ? 'ring-2 ring-amber-400 bg-amber-50/50 p-3 -mx-1' : ''}`}>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                    pCloud Access Token (Bearer Token)
+                  </label>
+                  <div className="relative">
+                    <input type={showCredential ? 'text' : 'password'} required placeholder="Paste pCloud access token" value={accessToken} onChange={(e) => setAccessToken(e.target.value)} autoComplete="new-password" className="w-full text-sm border rounded-lg px-3 py-2 pr-10 font-mono border-slate-300" disabled={submitting} />
+                    <button type="button" onClick={() => setShowCredential((visible) => !visible)} aria-label={showCredential ? 'Hide credential' : 'Show credential'} className="absolute inset-y-0 right-0 px-3 text-slate-500 hover:text-slate-800">{showCredential ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    The access token is verified immediately against pCloud /userinfo and encrypted at rest with AES-256-GCM.
+                  </p>
+                </div>
+                <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Daily Share/Transfer Cap</label><input type="number" min="1" max="10000" value={dailyLimit} onChange={(e) => setDailyLimit(Number(e.target.value))} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" disabled={submitting} /></div>
+                <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+                  <button type="button" onClick={resetModal} className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600" disabled={submitting}>Cancel</button>
+                  <button type="submit" disabled={submitting} className="px-4 py-2 rounded-lg bg-linear-to-r from-blue-600 to-cyan-600 text-white text-xs font-semibold flex items-center gap-1.5 disabled:opacity-60">
+                    {submitting ? (
+                      <><RefreshCw className="h-4 w-4 animate-spin" />Verifying Token...</>
+                    ) : (
+                      <><Check className="h-4 w-4" />Verify &amp; Save Account</>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">pCloud 2FA Code <span className="normal-case font-normal text-slate-400">(only if enabled)</span></label>
-              <input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{4,8}" placeholder="Enter current verification code" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8))} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 font-mono tracking-widest" />
-              <p className="text-[11px] text-slate-500 mt-1">Leave blank when the pCloud account does not use two-factor authentication.</p>
-            </div>
-            <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Daily Share/Transfer Cap</label><input type="number" min="1" max="10000" value={dailyLimit} onChange={(e) => setDailyLimit(Number(e.target.value))} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" /></div>
-            <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100"><button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600">Cancel</button><button type="submit" className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-xs font-semibold flex items-center gap-1.5"><Check className="h-4 w-4" />Verify & Save Production Account</button></div>
-          </form>
-        </div></div>}
+          </div>
+        )}
       </div>
     </Shell>
   );

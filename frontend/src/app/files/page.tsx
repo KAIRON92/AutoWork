@@ -131,7 +131,7 @@ export default function PCloudFilesPage() {
             <p className="text-sm text-slate-500 mt-1">Browse documents in connected pCloud accounts, upload campaign assets, and register sharing targets.</p>
           </div>
           <div className="flex items-center gap-3">
-            <button disabled={!activeAccounts.length} onClick={() => { setErrorMessage(''); setIsUploadModalOpen(true); }} className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow-md flex items-center gap-2"><Upload className="h-4 w-4" />Upload to pCloud</button>
+            <button disabled={!activeAccounts.length} onClick={() => { setErrorMessage(''); setIsUploadModalOpen(true); }} className="px-4 py-2.5 rounded-xl bg-linear-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow-md flex items-center gap-2"><Upload className="h-4 w-4" />Upload to pCloud</button>
           </div>
         </div>
 
@@ -170,7 +170,7 @@ export default function PCloudFilesPage() {
           <form onSubmit={handleUpload} className="space-y-4">
             <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Target pCloud Account</label><select value={selectedAccountId} onChange={(e) => setSelectedAccountId(e.target.value)} required className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2">{activeAccounts.map((acc) => <option key={acc.id} value={acc.id}>{acc.name} ({acc.accountEmail})</option>)}</select></div>
             <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Select File</label><input name="uploadFile" type="file" required className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700" /></div>
-            <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100"><button type="button" onClick={() => setIsUploadModalOpen(false)} className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button><button type="submit" disabled={!selectedAccountId} className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-xs font-semibold disabled:opacity-50 flex items-center gap-1.5"><Upload className="h-4 w-4" />Upload & Register</button></div>
+            <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100"><button type="button" onClick={() => setIsUploadModalOpen(false)} className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button><button type="submit" disabled={!selectedAccountId} className="px-4 py-2 rounded-lg bg-linear-to-r from-blue-600 to-cyan-600 text-white text-xs font-semibold disabled:opacity-50 flex items-center gap-1.5"><Upload className="h-4 w-4" />Upload & Register</button></div>
           </form>
         </div></div>}
       </div>

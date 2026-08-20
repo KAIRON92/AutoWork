@@ -145,7 +145,7 @@ export default function ContactsPage() {
             </button>
             <Link
               href="/imports"
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold hover:opacity-95 transition-all shadow-md shadow-blue-600/20 flex items-center gap-2"
+              className="px-4 py-2.5 rounded-xl bg-linear-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold hover:opacity-95 transition-all shadow-md shadow-blue-600/20 flex items-center gap-2"
             >
               <FileSpreadsheet className="h-4 w-4" />
               Import Wizard
@@ -332,7 +332,7 @@ export default function ContactsPage() {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg font-semibold hover:opacity-95 shadow-xs"
+                    className="px-4 py-2 bg-linear-to-r from-blue-600 to-cyan-600 text-white rounded-lg font-semibold hover:opacity-95 shadow-xs"
                   >
                     Save Contact
                   </button>
@@ -380,7 +380,7 @@ export default function ContactsPage() {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg font-semibold hover:opacity-95 shadow-xs"
+                    className="px-4 py-2 bg-linear-to-r from-blue-600 to-cyan-600 text-white rounded-lg font-semibold hover:opacity-95 shadow-xs"
                   >
                     Create List
                   </button>

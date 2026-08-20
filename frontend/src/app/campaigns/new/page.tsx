@@ -173,7 +173,7 @@ export default function NewCampaignWizardPage() {
                   onClick={() => setStep(stepNum as any)}
                   className={`p-2 rounded-lg cursor-pointer transition-all ${
                     isActive
-                      ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold shadow-xs'
+                      ? 'bg-linear-to-r from-blue-600 to-cyan-600 text-white font-bold shadow-xs'
                       : isPast
                       ? 'bg-cyan-50 text-cyan-800 font-semibold'
                       : 'bg-slate-50 text-slate-400 font-medium'
@@ -631,7 +631,7 @@ export default function NewCampaignWizardPage() {
               <button
                 onClick={handleLaunch}
                 disabled={isLaunching}
-                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white text-xs font-bold rounded-xl shadow-md disabled:opacity-50"
+                className="px-6 py-2.5 bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white text-xs font-bold rounded-xl shadow-md disabled:opacity-50"
               >
                 {isLaunching ? 'Dispatching to Queue...' : '🚀 Launch Campaign Now'}
               </button>

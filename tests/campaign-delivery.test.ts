@@ -210,7 +210,7 @@ describe('Phase 3 — Campaign Delivery Architecture & Sender Engine Suite', () 
         pCloudFile: { findFirst: jest.fn().mockResolvedValue({ id: 'f-1' }) },
         template: { findFirst: jest.fn().mockResolvedValue({ id: 't-1' }) },
         emailAccount: {
-          findFirst: jest.fn().mockImplementation(({ where }) => {
+          findFirst: jest.fn().mockImplementation(({ where }: { where: any }) => {
             if (where.organizationId === 'org-2' && where.id === 'acc-org-2') {
               return Promise.resolve({ id: 'acc-org-2', status: 'VERIFIED' });
             }

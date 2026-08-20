@@ -17,11 +17,16 @@
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "types": [
+      "node",
+      "jest"
+    ]
   },
   "include": [
     "workers/**/*",
     "automation-modules/**/*",
-    "backend/src/**/*"
+    "backend/src/**/*",
+    "tests/**/*"
   ]
 }

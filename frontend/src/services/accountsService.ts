@@ -33,4 +33,9 @@ export const accountsService = {
     await apiClient.delete(`/v1/pcloud/accounts/${id}`);
     return true;
   },
+
+  async getOAuthUrl(): Promise<{ url: string }> {
+    const res = await apiClient.get('/v1/pcloud/accounts/oauth/url');
+    return res.data;
+  },
 };

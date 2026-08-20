@@ -89,7 +89,7 @@ export default function DashboardPage() {
             </Link>
             <Link
               href="/campaigns/new"
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold hover:opacity-95 transition-all shadow-md shadow-blue-600/20 flex items-center gap-2"
+              className="px-4 py-2.5 rounded-xl bg-linear-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold hover:opacity-95 transition-all shadow-md shadow-blue-600/20 flex items-center gap-2"
             >
               <Plus className="h-4 w-4" />
               New pCloud Campaign
@@ -220,7 +220,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                         <div
-                          className="bg-gradient-to-r from-blue-600 to-cyan-500 h-2 rounded-full transition-all duration-500"
+                          className="bg-linear-to-r from-blue-600 to-cyan-500 h-2 rounded-full transition-all duration-500"
                           style={{ width: `${progressPct}%` }}
                         ></div>
                       </div>

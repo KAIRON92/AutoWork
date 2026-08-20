@@ -109,7 +109,7 @@ export default function AutomationsPage() {
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold hover:opacity-95 transition-all shadow-md shadow-blue-600/20 flex items-center gap-2"
+              className="px-4 py-2.5 rounded-xl bg-linear-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold hover:opacity-95 transition-all shadow-md shadow-blue-600/20 flex items-center gap-2"
             >
               <Plus className="h-4 w-4" />
               New Automation
@@ -134,7 +134,7 @@ export default function AutomationsPage() {
             </p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="mt-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-xs font-semibold rounded-xl hover:opacity-95"
+              className="mt-2 px-4 py-2 bg-linear-to-r from-blue-600 to-cyan-600 text-white text-xs font-semibold rounded-xl hover:opacity-95"
             >
               Create First Automation
             </button>
@@ -257,7 +257,7 @@ export default function AutomationsPage() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-5 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl hover:opacity-95 shadow-md shadow-blue-600/20 disabled:opacity-50"
+                    className="px-5 py-2 bg-linear-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl hover:opacity-95 shadow-md shadow-blue-600/20 disabled:opacity-50"
                   >
                     {isSubmitting ? 'Creating...' : 'Create Workflow'}
                   </button>

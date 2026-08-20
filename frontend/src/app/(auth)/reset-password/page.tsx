@@ -37,7 +37,7 @@ export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center space-y-2">
-        <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20 mx-auto">
+        <div className="h-12 w-12 rounded-2xl bg-linear-to-tr from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20 mx-auto">
           <Cloud className="h-6 w-6 text-white" />
         </div>
         <h2 className="text-2xl font-extrabold text-white tracking-tight">Create New Password</h2>
@@ -57,7 +57,7 @@ export default function ResetPasswordPage() {
               </p>
               <Link
                 href="/login"
-                className="inline-block px-5 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-600/30"
+                className="inline-block px-5 py-2.5 bg-linear-to-r from-blue-600 to-cyan-600 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-600/30"
               >
                 Sign in to Dashboard
               </Link>
@@ -101,7 +101,7 @@ export default function ResetPasswordPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 px-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-95 text-white text-xs font-semibold rounded-xl shadow-md shadow-blue-600/30 transition-all"
+                className="w-full py-2.5 px-4 bg-linear-to-r from-blue-600 to-cyan-600 hover:opacity-95 text-white text-xs font-semibold rounded-xl shadow-md shadow-blue-600/30 transition-all"
               >
                 {loading ? 'Updating password...' : 'Update Password & Sign In'}
               </button>

@@ -143,7 +143,7 @@ export default function TemplatesPage() {
           </div>
           <button
             onClick={handleCreateNew}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold hover:opacity-95 transition-all shadow-md shadow-blue-600/20 flex items-center gap-2"
+            className="px-4 py-2.5 rounded-xl bg-linear-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold hover:opacity-95 transition-all shadow-md shadow-blue-600/20 flex items-center gap-2"
           >
             <Plus className="h-4 w-4" />
             New Description Template
@@ -206,7 +206,7 @@ export default function TemplatesPage() {
                     </button>
                     <button
                       onClick={handleSave}
-                      className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-xs font-semibold rounded-lg hover:opacity-95 flex items-center gap-1.5 shadow-xs"
+                      className="px-4 py-2 bg-linear-to-r from-blue-600 to-cyan-600 text-white text-xs font-semibold rounded-lg hover:opacity-95 flex items-center gap-1.5 shadow-xs"
                     >
                       <Check className="h-3.5 w-3.5" />
                       Save Template
