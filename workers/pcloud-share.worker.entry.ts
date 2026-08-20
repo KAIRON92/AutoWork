@@ -1,7 +1,7 @@
 import { createPCloudShareWorker } from './pcloud-share.worker';
 
 const redisConnection = {
-  host: process.env.REDIS_HOST || 'redis',
+  host: process.env.REDIS_HOST || 'localhost',
   port: Number(process.env.REDIS_PORT || 6379),
 };
 

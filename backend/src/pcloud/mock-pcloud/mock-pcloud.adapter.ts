@@ -148,6 +148,16 @@ export class MockPCloudAdapter implements IPCloudAdapter {
     return found;
   }
 
+  async downloadFileBuffer(fileId: string, accessToken: string, apiHost?: string): Promise<{ buffer: Buffer; name: string; mimeType: string }> {
+    await this.delay();
+    const meta = await this.getFileMetadata(fileId, accessToken, apiHost);
+    return {
+      buffer: Buffer.from(`%PDF-1.4 Mock PDF content for file ${fileId}`),
+      name: meta.name,
+      mimeType: meta.mimeType,
+    };
+  }
+
   async uploadFile(options: {
     filename: string;
     buffer: Buffer;

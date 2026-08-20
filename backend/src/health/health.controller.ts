@@ -31,9 +31,31 @@ export class HealthController {
         this.jobsService.pcloudShareQueue.getJobCounts(),
         this.jobsService.campaignQueue.getJobCounts(),
         this.jobsService.importQueue.getJobCounts(),
+        this.jobsService.emailDispatchQueue.getJobCounts(),
       ]);
     } catch {
       redisStatus = 'UNAVAILABLE';
+    }
+
+    let pcloudWorkerStatus = 'OFFLINE';
+    let campaignWorkerStatus = 'OFFLINE';
+    let emailWorkerStatus = 'OFFLINE';
+
+    if (redisStatus === 'HEALTHY') {
+      try {
+        const [pcloudWorkers, campaignWorkers, emailWorkers] = await Promise.all([
+          this.jobsService.pcloudShareQueue.getWorkers(),
+          this.jobsService.campaignQueue.getWorkers(),
+          this.jobsService.emailDispatchQueue.getWorkers(),
+        ]);
+        pcloudWorkerStatus = pcloudWorkers.length > 0 ? 'LISTENING' : 'OFFLINE';
+        campaignWorkerStatus = campaignWorkers.length > 0 ? 'LISTENING' : 'OFFLINE';
+        emailWorkerStatus = emailWorkers.length > 0 ? 'LISTENING' : 'OFFLINE';
+      } catch {
+        pcloudWorkerStatus = 'UNKNOWN';
+        campaignWorkerStatus = 'UNKNOWN';
+        emailWorkerStatus = 'UNKNOWN';
+      }
     }
 
     const status = dbStatus === 'HEALTHY' && redisStatus === 'HEALTHY' ? 'OK' : 'DEGRADED';
@@ -45,9 +67,9 @@ export class HealthController {
         api: 'HEALTHY',
         database: dbStatus,
         redisQueue: redisStatus,
-        // A true worker heartbeat requires a separate heartbeat/lease mechanism.
-        // Keep this honest until that mechanism is implemented.
-        pcloudWorker: 'UNKNOWN',
+        pcloudWorker: pcloudWorkerStatus,
+        campaignWorker: campaignWorkerStatus,
+        emailWorker: emailWorkerStatus,
       },
       environment: process.env.NODE_ENV || 'development',
       version: '1.0.0',

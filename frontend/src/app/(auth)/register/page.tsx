@@ -33,7 +33,7 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-6">
         <div className="text-center space-y-2">
-          <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center mx-auto shadow-lg shadow-blue-500/20">
+          <div className="h-12 w-12 rounded-2xl bg-linear-to-tr from-blue-600 to-indigo-500 flex items-center justify-center mx-auto shadow-lg shadow-blue-500/20">
             <Zap className="h-7 w-7 text-white" />
           </div>
           <h1 className="text-2xl font-extrabold text-white tracking-tight">Register Organization</h1>

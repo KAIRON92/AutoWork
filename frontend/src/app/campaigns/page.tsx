@@ -95,7 +95,7 @@ export default function CampaignsPage() {
             </button>
             <Link
               href="/campaigns/new"
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold hover:opacity-95 transition-all shadow-md shadow-blue-600/20 flex items-center gap-2"
+              className="px-4 py-2.5 rounded-xl bg-linear-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold hover:opacity-95 transition-all shadow-md shadow-blue-600/20 flex items-center gap-2"
             >
               <Plus className="h-4 w-4" />
               New 8-Step Campaign
@@ -175,7 +175,7 @@ export default function CampaignsPage() {
                     </div>
                     <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden border border-slate-200">
                       <div
-                        className="bg-gradient-to-r from-blue-600 to-cyan-500 h-2.5 rounded-full transition-all duration-500"
+                        className="bg-linear-to-r from-blue-600 to-cyan-500 h-2.5 rounded-full transition-all duration-500"
                         style={{ width: `${pct}%` }}
                       ></div>
                     </div>
@@ -193,7 +193,7 @@ export default function CampaignsPage() {
                     ) : (
                       <button
                         onClick={() => handleLaunch(cmp.id)}
-                        className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-semibold hover:opacity-95 transition-colors flex items-center gap-1.5 shadow-sm"
+                        className="px-3.5 py-2 rounded-xl bg-linear-to-r from-emerald-600 to-teal-600 text-white text-xs font-semibold hover:opacity-95 transition-colors flex items-center gap-1.5 shadow-sm"
                       >
                         <Play className="h-3.5 w-3.5" />
                         Launch

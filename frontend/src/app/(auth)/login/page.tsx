@@ -37,7 +37,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-6">
         <div className="text-center space-y-2">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center mx-auto shadow-lg shadow-cyan-500/20">
+          <div className="h-14 w-14 rounded-2xl bg-linear-to-tr from-blue-600 to-cyan-500 flex items-center justify-center mx-auto shadow-lg shadow-cyan-500/20">
             <Cloud className="h-8 w-8 text-white" />
           </div>
           <h1 className="text-2xl font-extrabold text-white tracking-tight">Welcome to Autowork.com</h1>
@@ -105,7 +105,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-95 disabled:opacity-60 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 mt-4"
+            className="w-full py-3 bg-linear-to-r from-blue-600 to-cyan-600 hover:opacity-95 disabled:opacity-60 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 mt-4"
           >
             <span>{isLoading ? 'Authenticating...' : 'Sign In to Command Center'}</span>
             <ArrowRight className="h-4 w-4" />

@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/roles.decorator';
 import { JobsService } from '../jobs/jobs.service';
 
@@ -10,22 +10,32 @@ export class AdminController {
   constructor(private readonly jobsService: JobsService) {}
 
   @Get('health')
-  @ApiOperation({ summary: 'Get infrastructure and queue health status' })
+  @ApiOperation({ summary: 'Get infrastructure and worker queue health status' })
   async getHealth() {
-    const [pcloudShare, campaign, imports] = await Promise.all([
+    const [pcloudShare, campaign, imports, emailDispatch] = await Promise.all([
       this.jobsService.pcloudShareQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed'),
       this.jobsService.campaignQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed'),
       this.jobsService.importQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed'),
+      this.jobsService.emailDispatchQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed'),
     ]);
+
+    const activeWorkers = [
+      pcloudShare.active > 0,
+      campaign.active > 0,
+      imports.active > 0,
+      emailDispatch.active > 0,
+    ].filter(Boolean).length;
 
     return {
       status: 'healthy',
       redis: { connected: true },
       bullmq: {
+        activeWorkers,
         queues: {
           pcloudShare,
           campaign,
           imports,
+          emailDispatch,
         },
       },
       storage: { provider: 'pcloud', status: 'production' },

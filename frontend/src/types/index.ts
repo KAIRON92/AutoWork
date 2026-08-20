@@ -170,7 +170,7 @@ export type PCloudShareExecution = {
   recipientEmail: string;
   descriptionSnapshot: string;
   operationType: string;
-  status: 'SUCCESS' | 'FAILED' | 'RETRYING';
+  status: 'SUCCESS' | 'FAILED' | 'RETRYING' | 'PROCESSING' | 'UNKNOWN' | 'MANUAL_REVIEW' | string;
   pcloudReferenceId?: string;
   errorCode?: string;
   errorMessage?: string;

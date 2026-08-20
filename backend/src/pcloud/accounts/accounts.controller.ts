@@ -7,9 +7,12 @@ import {
   Param,
   Body,
   Request,
+  Query,
+  Res,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Response } from 'express';
 import { PCloudAccountsService, CreatePCloudAccountDto } from './accounts.service';
 import { Roles } from '../../auth/roles.decorator';
 
@@ -19,11 +22,43 @@ function currentOrgId(req: any): string {
   return orgId;
 }
 
+function currentUserId(req: any): string {
+  return req.user?.sub || req.user?.id || 'admin';
+}
+
 @ApiTags('pCloud Accounts')
 @ApiBearerAuth()
 @Controller('api/v1/pcloud/accounts')
 export class PCloudAccountsController {
   constructor(private accountsService: PCloudAccountsService) {}
+
+  @Get('oauth/url')
+  @Roles('ADMIN', 'MEMBER')
+  @ApiOperation({ summary: 'Generate official pCloud OAuth 2.0 authorization URL' })
+  async getOAuthUrl(@Request() req: any) {
+    const orgId = currentOrgId(req);
+    const userId = currentUserId(req);
+    return this.accountsService.getOAuthAuthorizeUrl(orgId, userId);
+  }
+
+  @Get('oauth/callback')
+  @ApiOperation({ summary: 'Complete pCloud OAuth 2.0 Code Flow callback and redirect to frontend' })
+  async handleOAuthCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Query('locationid') locationid: string,
+    @Query('hostname') hostname: string,
+    @Res() res: Response,
+  ) {
+    const frontend = process.env.FRONTEND_URL || 'http://localhost:3000';
+    try {
+      await this.accountsService.handleOAuthCallback(code, state, locationid, hostname);
+      return res.redirect(`${frontend}/accounts?connected=pcloud`);
+    } catch (error: any) {
+      const message = encodeURIComponent(error?.message || 'pCloud OAuth connection failed');
+      return res.redirect(`${frontend}/accounts?error=${message}`);
+    }
+  }
 
   @Get()
   async findAll(@Request() req: any) {
