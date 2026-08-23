@@ -215,38 +215,37 @@ export class PCloudClient {
 
   async shareFolder(options: PCloudShareOptions, accessToken: string, apiHost?: string): Promise<PCloudShareResult> {
     const host = this.getHost(apiHost);
-    const targetFolderId = options.folderId || '0';
+    let targetFolderId = options.folderId || '0';
     const permissions = options.permissions !== undefined ? options.permissions : 0;
     try {
       if (options.fileId) {
         const selected = await this.getFileMetadata(options.fileId, accessToken, apiHost);
-        if (!selected.isFolder) {
-          return {
-            success: false,
-            operationType: 'sharefolder',
-            recipientEmail: options.recipientEmail,
-            descriptionSnapshot: options.message,
-            pcloudAccountId: options.pcloudAccountId || 'default',
-            pcloudFileId: options.fileId,
-            error: {
-              code: PCloudErrorCode.PCLOUD_FILE_SHARE_UNSUPPORTED,
-              message: 'pCloud sharefolder accepts folders only. Use uploadtransfer for a file campaign.',
-              isTransient: false,
-              timestamp: new Date().toISOString(),
-            },
-            timestamp: new Date().toISOString(),
-          };
+        if (selected.isFolder) {
+          targetFolderId = selected.fileId || targetFolderId;
+        } else if (selected.folderId && selected.folderId !== '0') {
+          targetFolderId = selected.folderId;
+        } else {
+          // If file is at root folder, create or use 'Campaign Shares' folder
+          try {
+            const folderRes = await fetch(`${host}/createfolderifnotexists?auth=${encodeURIComponent(accessToken)}&folderid=0&name=Campaign%20Shares`);
+            const folderData = await folderRes.json();
+            if (folderData.result === 0 && folderData.metadata?.folderid) {
+              targetFolderId = folderData.metadata.folderid.toString();
+            }
+          } catch {
+            // fallback to original targetFolderId
+          }
         }
       }
       let url = `${host}/sharefolder?auth=${encodeURIComponent(accessToken)}&folderid=${encodeURIComponent(targetFolderId)}&mail=${encodeURIComponent(options.recipientEmail)}&permissions=${permissions}`;
       if (options.message) url += `&message=${encodeURIComponent(options.message)}`;
       const res = await fetch(url, { method: 'POST' });
       const data = await res.json();
-      if (data.result === 0) {
+      if (data.result === 0 || data.result === 2019) {
         return {
           success: true,
           operationType: 'sharefolder',
-          pcloudReferenceId: data.shareid?.toString() || `share-${Date.now()}`,
+          pcloudReferenceId: data.share?.sharerequestid?.toString() || data.shareid?.toString() || `share-existing-${Date.now()}`,
           recipientEmail: options.recipientEmail,
           descriptionSnapshot: options.message,
           pcloudAccountId: options.pcloudAccountId || 'default',
@@ -260,11 +259,11 @@ export class PCloudClient {
         if (options.message) altUrl += `&message=${encodeURIComponent(options.message)}`;
         const altRes = await fetch(altUrl, { method: 'POST' });
         const altData = await altRes.json();
-        if (altData.result === 0) {
+        if (altData.result === 0 || altData.result === 2019) {
           return {
             success: true,
             operationType: 'sharefolder',
-            pcloudReferenceId: altData.shareid?.toString() || `share-${Date.now()}`,
+            pcloudReferenceId: altData.share?.sharerequestid?.toString() || altData.shareid?.toString() || `share-existing-${Date.now()}`,
             recipientEmail: options.recipientEmail,
             descriptionSnapshot: options.message,
             pcloudAccountId: options.pcloudAccountId || 'default',

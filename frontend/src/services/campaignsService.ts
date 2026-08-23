@@ -20,6 +20,7 @@ export const campaignsService = {
     emailAccountId?: string;
     contactListId?: string;
     recipientContactIds?: string[];
+    recipientOverrides?: Record<string, string>;
     config?: {
       deliveryMode?: 'EMAIL' | 'PCLOUD_NATIVE';
       attachmentMode?: 'ATTACHMENT' | 'DIRECT_LINK' | 'BOTH';

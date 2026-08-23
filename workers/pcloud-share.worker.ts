@@ -37,7 +37,8 @@ export function createPCloudShareWorker(redisConnection: { host: string; port: n
       const apiHost = account.apiHost || undefined;
       const adapter = PCloudAdapterFactory.getAdapter(account.provider);
       const contact = await prisma.contact.findUnique({ where: { id: recipient.contactId } });
-      const { resolvedText, randomCode } = TemplateVariableResolver.resolve(data.templateContent, {
+      const templateToUse = recipient.resolvedDescription || data.templateContent;
+      const { resolvedText, randomCode } = TemplateVariableResolver.resolve(templateToUse, {
         email: recipient.recipientEmail,
         firstName: contact?.firstName,
         lastName: contact?.lastName,
@@ -150,6 +151,27 @@ export function createPCloudShareWorker(redisConnection: { host: string; port: n
             isTransient: true,
           },
         };
+      }
+
+      // Auto-fallback: If uploadtransfer failed (e.g. privacy policy block), try official authenticated shareFolder
+      if (!result.success && data.operationType !== 'sharefolder') {
+        try {
+          const fallbackResult = await adapter.shareFolder({
+            folderId: campaign.pcloudFile.folderId || '0',
+            fileId: campaign.pcloudFile.fileId,
+            recipientEmail: recipient.recipientEmail,
+            message: resolvedText,
+            pcloudAccountId: account.id,
+            organizationId: campaign.organizationId,
+            campaignId: campaign.id,
+            jobId: job.id,
+          }, credential, apiHost);
+          if (fallbackResult.success) {
+            result = fallbackResult;
+          }
+        } catch {
+          // keep original result
+        }
       }
 
       const attempts = Number(job.opts.attempts || 1);

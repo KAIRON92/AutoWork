@@ -117,12 +117,20 @@ export type Campaign = {
   pcloudAccountId: string;
   pcloudFileId: string;
   templateId: string;
+  emailAccountId?: string;
   contactListId?: string;
   totalCount: number;
   sharedCount: number;
   failedCount: number;
   retryingCount: number;
   config?: string;
+  emailAccount?: {
+    id: string;
+    displayName: string;
+    accountEmail: string;
+    provider: string;
+    status: string;
+  };
   pcloudAccount?: {
     id: string;
     name: string;

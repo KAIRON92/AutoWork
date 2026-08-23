@@ -10,6 +10,7 @@ export interface CreateCampaignDto {
   emailAccountId?: string;
   contactListId?: string;
   recipientContactIds?: string[];
+  recipientOverrides?: Record<string, string>;
   config?: {
     deliveryMode?: 'EMAIL' | 'PCLOUD_NATIVE';
     attachmentMode?: 'ATTACHMENT' | 'DIRECT_LINK' | 'BOTH';
@@ -134,6 +135,7 @@ export class CampaignsService {
           campaignId: campaign.id,
           contactId: c.id,
           recipientEmail: c.email,
+          resolvedDescription: dto.recipientOverrides?.[c.id] || null,
           status: 'PENDING',
         })),
       });

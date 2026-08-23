@@ -15,6 +15,7 @@ import {
   Cloud,
   FolderSync,
   Trash2,
+  Mail,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -37,6 +38,10 @@ export default function CampaignsPage() {
 
   useEffect(() => {
     fetchCampaigns();
+    const interval = setInterval(() => {
+      fetchCampaigns();
+    }, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   const filtered = campaigns.filter((c) => {
@@ -128,18 +133,49 @@ export default function CampaignsPage() {
             const failed = cmp.failedCount || 0;
             const pct = Math.round((shared / total) * 100);
 
+            const isAllFailed = cmp.status === 'COMPLETED' && shared === 0 && failed > 0;
+            const isPartial = cmp.status === 'COMPLETED' && shared > 0 && failed > 0;
+
+            let deliveryMode = 'PCLOUD_NATIVE';
+            try {
+              const cfg = JSON.parse(cmp.config || '{}');
+              if (cfg.deliveryMode) deliveryMode = cfg.deliveryMode;
+              else if (cmp.emailAccountId) deliveryMode = 'EMAIL';
+            } catch {
+              if (cmp.emailAccountId) deliveryMode = 'EMAIL';
+            }
+            const isEmail = deliveryMode === 'EMAIL';
+
             return (
               <div
                 key={cmp.id}
                 className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-slate-300 transition-all"
               >
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <h3 className="font-bold text-slate-900 text-lg">{cmp.name}</h3>
+
+                    {/* Delivery Channel Badge */}
+                    {isEmail ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        <Mail className="h-3.5 w-3.5 text-indigo-600" />
+                        Email SMTP
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-cyan-50 text-cyan-700 border border-cyan-200">
+                        <Cloud className="h-3.5 w-3.5 text-cyan-600" />
+                        pCloud Native
+                      </span>
+                    )}
+
                     <span
                       className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
                         cmp.status === 'PROCESSING'
                           ? 'bg-blue-100 text-blue-700 border border-blue-200 animate-pulse'
+                          : isAllFailed
+                          ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                          : isPartial
+                          ? 'bg-amber-100 text-amber-700 border border-amber-200'
                           : cmp.status === 'COMPLETED'
                           ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                           : cmp.status === 'DRAFT'
@@ -147,19 +183,33 @@ export default function CampaignsPage() {
                           : 'bg-amber-100 text-amber-700 border border-amber-200'
                       }`}
                     >
-                      {cmp.status}
+                      {isAllFailed ? 'FAILED (0 DELIVERED)' : isPartial ? 'PARTIAL DELIVERY' : cmp.status}
                     </span>
                   </div>
+
                   <p className="text-xs text-slate-500 flex items-center gap-3 flex-wrap">
-                    <span className="flex items-center gap-1">
-                      <Cloud className="h-3.5 w-3.5 text-cyan-600" />
-                      Account: <strong>{cmp.pcloudAccount?.name || 'Assigned Account'}</strong>
+                    <span className="flex items-center gap-1.5">
+                      {isEmail ? (
+                        <>
+                          <span className="p-1 rounded-md bg-indigo-100 text-indigo-700">
+                            <Mail className="h-3 w-3" />
+                          </span>
+                          Sender: <strong className="text-slate-800">{cmp.emailAccount?.accountEmail || 'SMTP Account'}</strong>
+                        </>
+                      ) : (
+                        <>
+                          <span className="p-1 rounded-md bg-cyan-100 text-cyan-700">
+                            <Cloud className="h-3 w-3" />
+                          </span>
+                          pCloud: <strong className="text-slate-800">{cmp.pcloudAccount?.accountEmail || cmp.pcloudAccount?.name || 'pCloud'}</strong>
+                        </>
+                      )}
                     </span>
                     <span className="flex items-center gap-1">
                       <FolderSync className="h-3.5 w-3.5 text-blue-600" />
-                      File: <strong>{cmp.pcloudFile?.name || 'Document'}</strong>
+                      Document: <strong className="text-slate-800">{cmp.pcloudFile?.name || 'Document'}</strong>
                     </span>
-                    <span>Template: <strong>{cmp.template?.name || 'Executive Share'}</strong></span>
+                    <span>Template: <strong className="text-slate-800">{cmp.template?.name || 'Executive Share'}</strong></span>
                   </p>
                   <p className="text-[11px] text-slate-400">Created: {new Date(cmp.createdAt).toLocaleString()}</p>
                 </div>
@@ -171,25 +221,33 @@ export default function CampaignsPage() {
                       <span>{pct}% Shared</span>
                       <span>
                         <strong className="text-emerald-600">{shared}</strong> shared / {total}
+                        {failed > 0 && <span className="text-rose-600 ml-1">({failed} failed)</span>}
                       </span>
                     </div>
                     <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden border border-slate-200">
                       <div
-                        className="bg-linear-to-r from-blue-600 to-cyan-500 h-2.5 rounded-full transition-all duration-500"
+                        className={`h-2.5 rounded-full transition-all duration-500 ${
+                          isAllFailed ? 'bg-rose-500' : 'bg-linear-to-r from-blue-600 to-cyan-500'
+                        }`}
                         style={{ width: `${pct}%` }}
                       ></div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {cmp.status === 'PROCESSING' ? (
+                    {cmp.status === 'PROCESSING' || cmp.status === 'QUEUED' ? (
                       <button
                         onClick={() => handlePause(cmp.id)}
                         className="px-3.5 py-2 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold hover:bg-amber-100 transition-colors flex items-center gap-1.5"
                       >
                         <Pause className="h-3.5 w-3.5" />
-                        Pause
+                        {cmp.status === 'QUEUED' ? 'Queued (Pause)' : 'Pause'}
                       </button>
+                    ) : cmp.status === 'COMPLETED' ? (
+                      <span className="px-3.5 py-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Done
+                      </span>
                     ) : (
                       <button
                         onClick={() => handleLaunch(cmp.id)}

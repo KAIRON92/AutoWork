@@ -58,7 +58,8 @@ export function createEmailDispatchWorker(redisConnection: { host: string; port:
 
       // Contact & Template Resolution
       const contact = await prisma.contact.findUnique({ where: { id: recipient.contactId } });
-      const { resolvedText, randomCode } = TemplateVariableResolver.resolve(data.templateContent, {
+      const templateToUse = recipient.resolvedDescription || data.templateContent;
+      const { resolvedText, randomCode } = TemplateVariableResolver.resolve(templateToUse, {
         email: recipient.recipientEmail,
         firstName: contact?.firstName,
         lastName: contact?.lastName,

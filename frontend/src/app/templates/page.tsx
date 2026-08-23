@@ -7,14 +7,14 @@ import { Template } from '@/types';
 import { FileText, Plus, Code, Eye, Sparkles, Check, Trash2, Edit3, Copy, RefreshCw } from 'lucide-react';
 
 const AVAILABLE_VARIABLES = [
-  { tag: '#NAME#', label: 'Full Name', example: 'Sarah Connor' },
-  { tag: '#FIRSTNAME#', label: 'First Name', example: 'Sarah' },
-  { tag: '#LASTNAME#', label: 'Last Name', example: 'Connor' },
-  { tag: '#EMAIL#', label: 'Email Address', example: 'sarah.c@cyberdyne.io' },
-  { tag: '#PHONE#', label: 'Phone Number', example: '+1 555-0192' },
-  { tag: '#COMPANY#', label: 'Company', example: 'Cyberdyne Systems' },
-  { tag: '#TARGET#', label: 'Target / Division', example: 'Strategic Growth Division' },
-  { tag: '#RANDOM#', label: 'Random Security Code', example: 'A72K9P (Unique 6-char per recipient)' },
+  { tag: '#NAME#', symbol: '👤', label: 'Full Name', example: 'Sarah Connor' },
+  { tag: '#FIRSTNAME#', symbol: '👤', label: 'First Name', example: 'Sarah' },
+  { tag: '#LASTNAME#', symbol: '👤', label: 'Last Name', example: 'Connor' },
+  { tag: '#EMAIL#', symbol: '✉️', label: 'Email Address', example: 'sarah.c@cyberdyne.io' },
+  { tag: '#PHONE#', symbol: '📞', label: 'Phone Number', example: '+1 555-0192' },
+  { tag: '#COMPANY#', symbol: '🏢', label: 'Company', example: 'Cyberdyne Systems' },
+  { tag: '#TARGET#', symbol: '🎯', label: 'Target / Division', example: 'Strategic Growth Division' },
+  { tag: '#RANDOM#', symbol: '🎲', label: 'Random Security Code', example: 'A72K9P (Unique 6-char per recipient)' },
 ];
 
 export default function TemplatesPage() {
@@ -250,11 +250,12 @@ export default function TemplatesPage() {
                           key={v.tag}
                           type="button"
                           onClick={() => insertVariable(v.tag)}
-                          className="px-2.5 py-1 rounded-md bg-cyan-50 hover:bg-cyan-100 text-cyan-800 border border-cyan-200 text-xs font-mono font-semibold transition-colors flex items-center gap-1"
+                          className="px-2.5 py-1.5 rounded-lg bg-cyan-50 hover:bg-cyan-100 text-cyan-900 border border-cyan-200 text-xs font-mono font-semibold transition-all hover:scale-[1.02] flex items-center gap-1.5 shadow-2xs"
                           title={`${v.label} (Example: ${v.example})`}
                         >
-                          <Sparkles className="h-3 w-3 text-cyan-600" />
-                          {v.tag}
+                          <span className="text-sm">{v.symbol}</span>
+                          <span className="font-bold">{v.tag}</span>
+                          <span className="text-[10px] text-cyan-600 font-sans">({v.label})</span>
                         </button>
                       ))}
                     </div>
