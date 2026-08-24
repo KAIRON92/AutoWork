@@ -1,15 +1,18 @@
-# AutoWork — Setup & Run Guide
+# AutoWork — Setup, Run & Handover Guide
 
-This is the **current practical setup guide** for running AutoWork locally on Windows. Keep real secrets out of Git. Use `.env.example` as the template.
+This is the practical Windows setup guide for AutoWork. For normal users, the preferred entry point is **`AutoWork.cmd`** in the repository root. It opens a guided launcher that can prepare the machine, start the project, diagnose common problems, update from GitHub, and push local changes.
+
+Keep real secrets out of Git. Use `.env.example` as the template.
 
 ## 1. Requirements
 
-Install:
+The launcher can detect missing tools and, when WinGet is available, attempt to install:
 
 - Git
-- Node.js **20.x** (recommended for the current verified backend setup)
-- npm
-- Docker Desktop (recommended; provides PostgreSQL + Redis)
+- Node.js LTS
+- Docker Desktop
+
+AutoWork is primarily verified with Node.js 20.x. Node.js 22.x may work, but if a dependency reports a runtime compatibility problem, use Node.js 20.x.
 
 AutoWork uses:
 
@@ -21,7 +24,38 @@ AutoWork uses:
 - Redis/BullMQ workers
 - pCloud real API integration
 
-## 2. Get the project
+## 2. One-command launcher — recommended
+
+After the repository is present on Windows, double-click:
+
+```text
+AutoWork.cmd
+```
+
+Or run from PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\AutoWork.ps1
+```
+
+The launcher menu provides:
+
+1. **Setup + Run** — checks tools, starts Docker, creates `backend/.env`, resolves PostgreSQL/Redis host-port conflicts, installs missing npm dependencies, generates Prisma Client, applies migrations, and opens backend/frontend/worker terminals.
+2. **Run** — performs the same safe readiness checks and starts the project.
+3. **Update from GitHub** — fetches `origin/main` and fast-forwards only when the working tree is clean.
+4. **Git Sync + Push** — stages local changes, checks the staged diff, asks for a commit message, commits, and pushes `main`.
+5. **Diagnostics** — shows tool, dependency, Docker and Git status.
+6. **Stop** — stops AutoWork Docker services and identifiable Node processes belonging to this repository.
+
+The launcher deliberately does **not** blindly overwrite credentials, delete unrelated Docker containers, force-reset Git history, or pretend that an arbitrary runtime error can be automatically fixed. When a problem requires human action, it stops with the exact prerequisite that needs attention.
+
+### Important first-time limitation
+
+A script stored inside a Git repository cannot install Git before the repository exists. On a completely fresh Windows machine, obtain the repository once (Git clone or ZIP), then `AutoWork.cmd` can handle the rest. If WinGet is unavailable, install/update Windows App Installer first.
+
+## 3. Get the project
+
+With Git:
 
 ```powershell
 git clone https://github.com/KAIRON92/AutoWork.git
@@ -35,91 +69,68 @@ git checkout main
 git pull origin main
 ```
 
-## 3. Configure environment
+Then use `AutoWork.cmd` for normal setup/run operations.
 
-Copy the example file to a local `.env` used by the backend:
+## 4. Environment configuration
 
-```powershell
-Copy-Item .env.example backend/.env
-```
+The launcher automatically creates `backend/.env` from `.env.example` if it does not exist. It also generates local random secrets for placeholder JWT/encryption values.
 
-Edit `backend/.env` and set real local secrets. At minimum, set:
+Real pCloud credentials are intentionally **not** generated. They must be supplied by the application owner:
 
 ```env
-NODE_ENV=development
-PORT=4000
-FRONTEND_URL=http://localhost:3000
-
-DATABASE_URL="postgresql://autowork:autoworkpass@localhost:5432/autowork_db?schema=public"
-REDIS_HOST=localhost
-REDIS_PORT=6379
-
-JWT_SECRET=<long-random-secret>
-REFRESH_TOKEN_SECRET=<long-random-secret>
-PCLOUD_CREDENTIAL_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
-EMAIL_CREDENTIAL_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
-
-PCLOUD_DEFAULT_PROVIDER=pcloud
-PCLOUD_ALLOW_MOCK=false
-PCLOUD_API_URL=https://api.pcloud.com
-PCLOUD_API_HOST=https://api.pcloud.com
-
-# Required for the pCloud OAuth connection flow
 PCLOUD_CLIENT_ID=<pCloud-app-client-id>
 PCLOUD_CLIENT_SECRET=<pCloud-app-client-secret>
 PCLOUD_REDIRECT_URI=http://localhost:4000/api/v1/pcloud/accounts/oauth/callback
-
-EMAIL_DEFAULT_PROVIDER=
-EMAIL_ALLOW_FAKE=false
-
-GMAIL_CLIENT_ID=
-GMAIL_CLIENT_SECRET=
-GMAIL_REDIRECT_URI=http://localhost:4000/api/v1/email/accounts/gmail/callback
 ```
 
 Never commit `backend/.env` or any real credentials/tokens.
 
-### Generate an AES-256 encryption key in PowerShell
+### Generate an AES-256 encryption key manually if needed
 
 ```powershell
 [Convert]::ToBase64String((1..32 | ForEach-Object { [byte](Get-Random -Minimum 0 -Maximum 256) }))
 ```
 
-## 4. Start PostgreSQL and Redis
+## 5. Docker, PostgreSQL and Redis
 
-### Recommended: Docker Compose
-
-From the repository root:
+The launcher starts only AutoWork's PostgreSQL and Redis services for local development:
 
 ```powershell
 docker compose -f docker/docker-compose.yml up -d postgres redis
 ```
 
-Check:
+The compose file supports these ignored local environment overrides:
+
+```env
+POSTGRES_HOST_PORT=5432
+REDIS_HOST_PORT=6379
+```
+
+If those ports are already occupied, the launcher automatically selects free host ports (for example `55432` and `56379`) and writes the matching local `DATABASE_URL` / Redis settings into `backend/.env`. The containers still use their normal internal ports 5432 and 6379.
+
+Check services manually with:
 
 ```powershell
 docker compose -f docker/docker-compose.yml ps
 ```
 
-PostgreSQL should be available on `localhost:5432` and Redis on `localhost:6379`.
+The launcher does not stop or delete unrelated containers such as another project's PostgreSQL or Redis.
 
-## 5. Install dependencies
+## 6. Manual dependency installation
 
-Open a terminal in the repository root and install backend dependencies:
+The launcher normally handles this. Manual commands are:
 
 ```powershell
 cd backend
-npm install
+npm ci
+
+cd ..\frontend
+npm ci
 ```
 
-Then install frontend dependencies in a second terminal:
+If dependencies change after a Git pull, the launcher compares `package-lock.json` timestamps with `node_modules` and reinstalls when needed.
 
-```powershell
-cd frontend
-npm install
-```
-
-## 6. Prepare Prisma/database
+## 7. Prepare Prisma/database manually
 
 From `backend`:
 
@@ -129,82 +140,71 @@ npm run prisma:migrate:status
 npm run prisma:migrate:deploy
 ```
 
-For a development-only schema push when explicitly required:
+For development-only schema push when explicitly required:
 
 ```powershell
 npm run prisma:push
 ```
 
-Prefer migrations for normal project setup and handover.
+Prefer migrations for normal setup and handover.
 
-## 7. Run the backend
+## 8. Run manually
 
-Terminal 1:
+Backend terminal:
 
 ```powershell
-cd D:\AutoWork-main\backend
+cd backend
 npm run start:dev
 ```
 
-Backend:
-
-- API: `http://localhost:4000`
-- Swagger: `http://localhost:4000/api/docs`
-- Health: `http://localhost:4000/api/health`
-
-## 8. Run the frontend
-
-Terminal 2:
+Frontend terminal:
 
 ```powershell
-cd D:\AutoWork-main\frontend
+cd frontend
 npm run dev
 ```
 
-Open:
-
-```text
-http://localhost:3000
-```
-
-## 9. Run workers
-
-For a real local workflow, the asynchronous workers also need to be running.
-
-Terminal 3:
+Workers:
 
 ```powershell
-cd D:\AutoWork-main\backend
+cd backend
 npm run worker:campaign
 ```
 
-Terminal 4:
-
 ```powershell
-cd D:\AutoWork-main\backend
+cd backend
 npm run worker:pcloud
 ```
 
-Terminal 5:
-
 ```powershell
-cd D:\AutoWork-main\backend
+cd backend
 npm run worker:email
 ```
 
-Alternatively, run the complete Docker Compose stack from the repository root:
+The launcher opens these five PowerShell windows automatically.
+
+URLs:
+
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:4000`
+- Swagger: `http://localhost:4000/api/docs`
+- Health: `http://localhost:4000/api/health`
+
+## 9. Full Docker stack
+
+For an all-Docker run, use:
 
 ```powershell
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-This starts frontend, backend, PostgreSQL, Redis, campaign worker, pCloud worker, and email worker.
+This starts frontend, backend, PostgreSQL, Redis, campaign worker, pCloud worker and email worker.
 
 ## 10. pCloud authentication — current architecture
 
-**Important:** the old assumption that `/login` with username/password will automatically generate an email verification code must not be used as the integration architecture.
+The old assumption that `/login` with username/password will automatically generate an email verification code must not be used as the integration architecture.
 
-AutoWork now supports the official **pCloud OAuth 2.0 server-side Code Flow** for the application integration:
+AutoWork uses the official **pCloud OAuth 2.0 server-side Code Flow**:
 
 ```text
 AutoWork UI
@@ -235,8 +235,8 @@ The client secret must remain backend-only.
 
 ### Connect the account
 
-1. Start backend and frontend.
-2. Open AutoWork at `http://localhost:3000`.
+1. Start AutoWork.
+2. Open `http://localhost:3000`.
 3. Go to Accounts.
 4. Choose **Connect via OAuth 2.0**.
 5. Complete the pCloud login/consent screen.
@@ -272,7 +272,7 @@ cd frontend
 npm run build
 ```
 
-Optional backend test commands:
+Optional backend tests:
 
 ```powershell
 npm run test:watch
@@ -280,63 +280,85 @@ npm run test:cov
 npm run test:e2e
 ```
 
-## 13. Health checks
+## 13. Health checks and diagnostics
 
-Backend health:
+Manual health check:
 
 ```powershell
 Invoke-WebRequest http://localhost:4000/api/health
 ```
 
-Docker services:
+Docker:
 
 ```powershell
 docker compose -f docker/docker-compose.yml ps
 ```
 
-Useful logs:
+Logs:
 
 ```powershell
 docker compose -f docker/docker-compose.yml logs -f backend
+```
+
+Recommended launcher diagnostic:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\AutoWork.ps1 -Action diagnose
 ```
 
 ## 14. Common startup problems
 
 ### `fatal: not a git repository`
 
-You are in the wrong directory. Use:
+You are in the wrong directory. Run the launcher from the repository root or use:
 
 ```powershell
-cd D:\AutoWork-main
+cd AutoWork
 git status
 ```
 
-### PostgreSQL connection refused
+### PostgreSQL port 5432 already allocated
 
-Start PostgreSQL through Docker:
+The launcher detects this and automatically assigns another host port. Manual compose also supports:
 
 ```powershell
+$env:POSTGRES_HOST_PORT=55432
 docker compose -f docker/docker-compose.yml up -d postgres
 ```
 
-### Redis connection refused
+Then make sure `backend/.env` uses the same host port.
+
+### Redis port 6379 already allocated
+
+The launcher detects this and automatically assigns another host port. Manual compose supports:
 
 ```powershell
+$env:REDIS_HOST_PORT=56379
 docker compose -f docker/docker-compose.yml up -d redis
 ```
 
+### Docker is installed but not running
+
+The launcher tries to start Docker Desktop and waits for the Docker Engine. If it cannot become ready, open Docker Desktop, wait until it reports that the engine is running, and rerun `AutoWork.cmd`.
+
+### Docker is not installed
+
+The launcher attempts to install Docker Desktop through WinGet. Installation may require elevation, a restart, or manual completion. Windows WinGet installation behavior can require administrator elevation depending on the installer. After installation, reopen PowerShell and rerun the launcher.
+
 ### Prisma/client errors
 
-From `backend`:
+Run:
 
 ```powershell
+cd backend
+npm ci
 npm run prisma:generate
 npm run prisma:migrate:status
 ```
 
 ### pCloud `1022 Please provide 'code'`
 
-Do not treat this as proof that an email OTP was sent. For the current application integration, configure the registered pCloud OAuth app and use the OAuth 2.0 Code Flow. The required application values are `PCLOUD_CLIENT_ID`, `PCLOUD_CLIENT_SECRET`, and the registered callback URI.
+Do not treat this as proof that an email OTP was sent. Configure the registered pCloud OAuth app and use the OAuth 2.0 Code Flow. Required application values are `PCLOUD_CLIENT_ID`, `PCLOUD_CLIENT_SECRET`, and the registered callback URI.
 
 ### OAuth callback mismatch
 
@@ -348,9 +370,19 @@ http://localhost:4000/api/v1/pcloud/accounts/oauth/callback
 
 and the same value must be present in `PCLOUD_REDIRECT_URI`.
 
+### `.git/index.lock` exists
+
+Only remove the lock when no Git process is running:
+
+```powershell
+Remove-Item .git\index.lock -Force
+```
+
+Then retry the Git command.
+
 ## 15. Before claiming the project works
 
-A successful frontend build or a successful API health response is not enough.
+A successful frontend build or API health response is not enough.
 
 For real acceptance, verify:
 
@@ -376,7 +408,18 @@ Login
 
 Start with a controlled one-recipient test before increasing the test size.
 
-## 16. Git workflow for team members
+## 16. Git workflow
+
+Normal team workflow can now be done from the launcher:
+
+```text
+AutoWork.cmd
+  -> Update from GitHub
+  -> work locally
+  -> Git Sync + Push
+```
+
+Manual workflow:
 
 Before working:
 
@@ -396,18 +439,14 @@ git commit -m "describe the change"
 git push origin main
 ```
 
-If `.git/index.lock` exists and no Git process is running:
-
-```powershell
-Remove-Item .git\index.lock -Force
-```
-
-Then retry the Git command.
+The launcher uses `git pull --ff-only` and never force-resets local history. It also refuses to pull over uncommitted local changes and refuses to push when the remote has diverged unexpectedly.
 
 ## 17. Source of truth
 
 - Repository: `https://github.com/KAIRON92/AutoWork`
 - Branch: `main`
+- One-command launcher: `AutoWork.cmd`
+- Launcher implementation: `tools/AutoWork.ps1`
 - General architecture/product blueprint: `README.md`
 - Practical setup/run instructions: `SETUP.md`
 - Environment template: `.env.example`
