@@ -1,10 +1,14 @@
 @echo off
 setlocal
+title AutoWork Control Center
 cd /d "%~dp0"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\AutoWork.ps1"
+if "%~1"=="" (
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\AutoWork.ps1" -Action menu
+) else (
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\AutoWork.ps1" -Action %*
+)
 if errorlevel 1 (
   echo.
-  echo AutoWork stopped because an error occurred.
   pause
 )
 endlocal

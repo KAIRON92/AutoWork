@@ -15,7 +15,9 @@ import {
   ScrollText,
   Settings,
   ShieldCheck,
+  LogOut,
 } from 'lucide-react';
+import { authService } from '@/services/authService';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -37,6 +39,15 @@ const adminNavigation = [
 
 export function Sidebar() {
   const pathname = usePathname();
+
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+      window.location.href = '/login';
+    } catch {
+      window.location.href = '/login';
+    }
+  };
 
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 text-slate-200 flex flex-col justify-between h-screen sticky top-0">
@@ -83,7 +94,15 @@ export function Sidebar() {
           );
         })}
 
-        <div className="mt-3 px-3 py-2 rounded-lg bg-slate-800/40 border border-slate-700/50 flex items-center justify-between text-xs text-slate-400">
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-rose-400 hover:text-rose-200 hover:bg-rose-500/10 transition-all text-left mt-1"
+        >
+          <LogOut className="h-4 w-4 text-rose-400" />
+          <span>Log Out</span>
+        </button>
+
+        <div className="mt-2 px-3 py-2 rounded-lg bg-slate-800/40 border border-slate-700/50 flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center gap-2">
             <Cloud className="h-3.5 w-3.5 text-cyan-400" />
             <span>pCloud Engine</span>
