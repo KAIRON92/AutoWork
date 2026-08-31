@@ -10,8 +10,19 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
+  const configuredOrigins = String(process.env.FRONTEND_URL || 'http://localhost:3000')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: (requestOrigin, callback) => {
+      // Allow non-browser/server-to-server requests with no Origin header.
+      if (!requestOrigin || configuredOrigins.includes(requestOrigin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('CORS origin not allowed'), false);
+    },
     credentials: true,
   });
 
