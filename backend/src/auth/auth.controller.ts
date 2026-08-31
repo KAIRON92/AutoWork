@@ -15,20 +15,36 @@ import { AuthRateLimitGuard } from './auth-rate-limit.guard';
 const AUTH_COOKIE = 'autowork_jwt_token';
 const AUTH_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
+type SameSite = 'Lax' | 'Strict' | 'None';
+
+function getCookieOptions() {
+  const configured = String(process.env.AUTH_COOKIE_SAMESITE || 'Lax').toLowerCase();
+  const sameSite: SameSite = configured === 'strict' ? 'Strict' : configured === 'none' ? 'None' : 'Lax';
+  const secure = process.env.NODE_ENV === 'production' || sameSite === 'None';
+  const domain = process.env.AUTH_COOKIE_DOMAIN?.trim();
+  return { sameSite, secure, domain };
+}
+
 function setAuthCookie(res: Response, token: string) {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  res.setHeader(
-    'Set-Cookie',
-    `${AUTH_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${AUTH_MAX_AGE_SECONDS}; HttpOnly; SameSite=Lax${secure}`,
-  );
+  const { sameSite, secure, domain } = getCookieOptions();
+  const parts = [
+    `${AUTH_COOKIE}=${encodeURIComponent(token)}`,
+    'Path=/',
+    `Max-Age=${AUTH_MAX_AGE_SECONDS}`,
+    'HttpOnly',
+    `SameSite=${sameSite}`,
+  ];
+  if (secure) parts.push('Secure');
+  if (domain) parts.push(`Domain=${domain}`);
+  res.setHeader('Set-Cookie', parts.join('; '));
 }
 
 function clearAuthCookie(res: Response) {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  res.setHeader(
-    'Set-Cookie',
-    `${AUTH_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secure}`,
-  );
+  const { sameSite, secure, domain } = getCookieOptions();
+  const parts = [`${AUTH_COOKIE}=`, 'Path=/', 'Max-Age=0', 'HttpOnly', `SameSite=${sameSite}`];
+  if (secure) parts.push('Secure');
+  if (domain) parts.push(`Domain=${domain}`);
+  res.setHeader('Set-Cookie', parts.join('; '));
 }
 
 @ApiTags('Authentication')
