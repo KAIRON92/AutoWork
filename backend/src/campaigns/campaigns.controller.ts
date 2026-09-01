@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CampaignsService, CreateCampaignDto } from './campaigns.service';
+import { Roles } from '../auth/roles.decorator';
 
 function currentOrgId(req: any): string {
   const orgId = req.user?.orgId;
@@ -36,24 +37,28 @@ export class CampaignsController {
   }
 
   @Post()
+  @Roles('ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Create a new configured pCloud share campaign' })
   async create(@Body() dto: CreateCampaignDto, @Request() req: any) {
     return this.campaignsService.create(currentOrgId(req), dto);
   }
 
   @Post(':id/launch')
+  @Roles('ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Launch campaign and begin pCloud share/transfer execution' })
   async launch(@Param('id') id: string, @Request() req: any) {
     return this.campaignsService.launch(id, currentOrgId(req));
   }
 
   @Post(':id/pause')
+  @Roles('ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Pause campaign execution' })
   async pause(@Param('id') id: string, @Request() req: any) {
     return this.campaignsService.pause(id, currentOrgId(req));
   }
 
   @Delete(':id')
+  @Roles('ADMIN')
   @ApiOperation({ summary: 'Delete a campaign' })
   async remove(@Param('id') id: string, @Request() req: any) {
     return this.campaignsService.remove(id, currentOrgId(req));

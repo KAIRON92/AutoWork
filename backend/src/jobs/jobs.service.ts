@@ -7,6 +7,7 @@ export class JobsService implements OnModuleInit {
   private readonly logger = new Logger(JobsService.name);
 
   public pcloudShareQueue!: Queue;
+  public emailDispatchQueue!: Queue;
   public importQueue!: Queue;
   public campaignQueue!: Queue;
 
@@ -19,21 +20,31 @@ export class JobsService implements OnModuleInit {
     };
 
     this.pcloudShareQueue = new Queue('pcloud-share-queue', { connection });
+    this.emailDispatchQueue = new Queue('email-dispatch-queue', { connection });
     this.importQueue = new Queue('import-queue', { connection });
     this.campaignQueue = new Queue('campaign-queue', { connection });
 
     await Promise.all([
       this.pcloudShareQueue.waitUntilReady(),
+      this.emailDispatchQueue.waitUntilReady(),
       this.importQueue.waitUntilReady(),
       this.campaignQueue.waitUntilReady(),
     ]);
 
-    this.logger.log('🚀 BullMQ queues connected to Redis (pcloud-share-queue, import-queue, campaign-queue)');
+    this.logger.log('🚀 BullMQ queues connected to Redis (pcloud-share-queue, email-dispatch-queue, import-queue, campaign-queue)');
   }
 
   async enqueuePCloudShareJob(data: any) {
     if (!this.pcloudShareQueue) throw new Error('pCloud share queue is not initialized');
     return this.pcloudShareQueue.add('pcloud-share', data, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 3000 },
+    });
+  }
+
+  async enqueueEmailDispatchJob(data: any) {
+    if (!this.emailDispatchQueue) throw new Error('Email dispatch queue is not initialized');
+    return this.emailDispatchQueue.add('email-dispatch', data, {
       attempts: 3,
       backoff: { type: 'exponential', delay: 3000 },
     });

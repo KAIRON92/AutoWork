@@ -20,15 +20,16 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4000
-      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-autowork}:${POSTGRES_PASSWORD:-autoworkpass}@postgres:5432/${POSTGRES_DB:-autowork_db}?schema=public}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - JWT_SECRET=${JWT_SECRET:-autowork_jwt_secret_dev_32_characters_minimum}
       - PCLOUD_DEFAULT_PROVIDER=${PCLOUD_DEFAULT_PROVIDER:-pcloud}
       - PCLOUD_ALLOW_MOCK=${PCLOUD_ALLOW_MOCK:-false}
       - PCLOUD_API_HOST=${PCLOUD_API_HOST:-https://api.pcloud.com}
       - PCLOUD_API_URL=${PCLOUD_API_URL:-https://api.pcloud.com}
-      - PCLOUD_CREDENTIAL_ENCRYPTION_KEY=${PCLOUD_CREDENTIAL_ENCRYPTION_KEY:?PCLOUD_CREDENTIAL_ENCRYPTION_KEY is required}
+      - PCLOUD_CREDENTIAL_ENCRYPTION_KEY=${PCLOUD_CREDENTIAL_ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+      - EMAIL_CREDENTIAL_ENCRYPTION_KEY=${EMAIL_CREDENTIAL_ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
       - EMAIL_DEFAULT_PROVIDER=${EMAIL_DEFAULT_PROVIDER:-}
       - EMAIL_ALLOW_FAKE=${EMAIL_ALLOW_FAKE:-false}
       - GMAIL_CLIENT_ID=${GMAIL_CLIENT_ID:-}
@@ -53,14 +54,15 @@ services:
       dockerfile: docker/Dockerfile.worker
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-autowork}:${POSTGRES_PASSWORD:-autoworkpass}@postgres:5432/${POSTGRES_DB:-autowork_db}?schema=public}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - PCLOUD_DEFAULT_PROVIDER=${PCLOUD_DEFAULT_PROVIDER:-pcloud}
       - PCLOUD_ALLOW_MOCK=${PCLOUD_ALLOW_MOCK:-false}
       - PCLOUD_API_HOST=${PCLOUD_API_HOST:-https://api.pcloud.com}
       - PCLOUD_API_URL=${PCLOUD_API_URL:-https://api.pcloud.com}
-      - PCLOUD_CREDENTIAL_ENCRYPTION_KEY=${PCLOUD_CREDENTIAL_ENCRYPTION_KEY:?PCLOUD_CREDENTIAL_ENCRYPTION_KEY is required}
+      - PCLOUD_CREDENTIAL_ENCRYPTION_KEY=${PCLOUD_CREDENTIAL_ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+      - EMAIL_CREDENTIAL_ENCRYPTION_KEY=${EMAIL_CREDENTIAL_ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
     command: ["npx", "ts-node", "--transpile-only", "../workers/campaign.worker.entry.ts"]
     depends_on:
       postgres:
@@ -70,21 +72,46 @@ services:
       backend:
         condition: service_healthy
 
-  worker:
+  worker-pcloud:
     build:
       context: ..
       dockerfile: docker/Dockerfile.worker
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-autowork}:${POSTGRES_PASSWORD:-autoworkpass}@postgres:5432/${POSTGRES_DB:-autowork_db}?schema=public}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - PCLOUD_DEFAULT_PROVIDER=${PCLOUD_DEFAULT_PROVIDER:-pcloud}
       - PCLOUD_ALLOW_MOCK=${PCLOUD_ALLOW_MOCK:-false}
       - PCLOUD_API_HOST=${PCLOUD_API_HOST:-https://api.pcloud.com}
       - PCLOUD_API_URL=${PCLOUD_API_URL:-https://api.pcloud.com}
-      - PCLOUD_CREDENTIAL_ENCRYPTION_KEY=${PCLOUD_CREDENTIAL_ENCRYPTION_KEY:?PCLOUD_CREDENTIAL_ENCRYPTION_KEY is required}
+      - PCLOUD_CREDENTIAL_ENCRYPTION_KEY=${PCLOUD_CREDENTIAL_ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+      - EMAIL_CREDENTIAL_ENCRYPTION_KEY=${EMAIL_CREDENTIAL_ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
     command: ["npx", "ts-node", "--transpile-only", "../workers/pcloud-share.worker.entry.ts"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+
+  worker-email:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-autowork}:${POSTGRES_PASSWORD:-autoworkpass}@postgres:5432/${POSTGRES_DB:-autowork_db}?schema=public}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - PCLOUD_DEFAULT_PROVIDER=${PCLOUD_DEFAULT_PROVIDER:-pcloud}
+      - PCLOUD_ALLOW_MOCK=${PCLOUD_ALLOW_MOCK:-false}
+      - PCLOUD_API_HOST=${PCLOUD_API_HOST:-https://api.pcloud.com}
+      - PCLOUD_API_URL=${PCLOUD_API_URL:-https://api.pcloud.com}
+      - PCLOUD_CREDENTIAL_ENCRYPTION_KEY=${PCLOUD_CREDENTIAL_ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+      - EMAIL_CREDENTIAL_ENCRYPTION_KEY=${EMAIL_CREDENTIAL_ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+    command: ["npx", "ts-node", "--transpile-only", "../workers/email-dispatch.worker.entry.ts"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -97,14 +124,14 @@ services:
     image: postgres:15-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-autowork}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-autoworkpass}
       POSTGRES_DB: ${POSTGRES_DB:-autowork_db}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-autowork} -d $${POSTGRES_DB:-autowork_db}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -112,7 +139,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_HOST_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:

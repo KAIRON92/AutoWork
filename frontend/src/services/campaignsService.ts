@@ -17,9 +17,18 @@ export const campaignsService = {
     pcloudAccountId: string;
     pcloudFileId: string;
     templateId: string;
+    emailAccountId?: string;
     contactListId?: string;
     recipientContactIds?: string[];
-    config?: any;
+    recipientOverrides?: Record<string, string>;
+    config?: {
+      deliveryMode?: 'EMAIL' | 'PCLOUD_NATIVE';
+      attachmentMode?: 'ATTACHMENT' | 'DIRECT_LINK' | 'BOTH';
+      subject?: string;
+      shareType?: 'sharefolder' | 'uploadtransfer';
+      rateLimitPerMinute?: number;
+      retryCount?: number;
+    };
   }): Promise<Campaign> {
     const res = await apiClient.post('/v1/campaigns', data);
     return res.data;

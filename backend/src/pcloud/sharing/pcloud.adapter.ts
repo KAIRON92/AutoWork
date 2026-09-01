@@ -43,6 +43,10 @@ export class PCloudRealAdapter implements IPCloudAdapter {
     return await this.client.getFileMetadata(fileId, accessToken, apiHost);
   }
 
+  async downloadFileBuffer(fileId: string, accessToken: string, apiHost?: string): Promise<{ buffer: Buffer; name: string; mimeType: string }> {
+    return await this.client.downloadFileBuffer(fileId, accessToken, apiHost);
+  }
+
   async uploadFile(options: {
     filename: string;
     buffer: Buffer;

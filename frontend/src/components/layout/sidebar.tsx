@@ -15,7 +15,9 @@ import {
   ScrollText,
   Settings,
   ShieldCheck,
+  LogOut,
 } from 'lucide-react';
+import { authService } from '@/services/authService';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -38,11 +40,20 @@ const adminNavigation = [
 export function Sidebar() {
   const pathname = usePathname();
 
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+      window.location.href = '/login';
+    } catch {
+      window.location.href = '/login';
+    }
+  };
+
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 text-slate-200 flex flex-col justify-between h-screen sticky top-0">
       <div>
         <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-800 bg-slate-950/50">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <div className="h-9 w-9 rounded-xl bg-linear-to-tr from-cyan-600 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
             <Cloud className="h-5 w-5 text-white" />
           </div>
           <div>
@@ -60,7 +71,7 @@ export function Sidebar() {
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md shadow-blue-600/30' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'}`}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-linear-to-r from-blue-600 to-cyan-600 text-white shadow-md shadow-blue-600/30' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'}`}
               >
                 <Icon className={`h-4 w-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
                 <span>{item.name}</span>
@@ -83,7 +94,15 @@ export function Sidebar() {
           );
         })}
 
-        <div className="mt-3 px-3 py-2 rounded-lg bg-slate-800/40 border border-slate-700/50 flex items-center justify-between text-xs text-slate-400">
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-rose-400 hover:text-rose-200 hover:bg-rose-500/10 transition-all text-left mt-1"
+        >
+          <LogOut className="h-4 w-4 text-rose-400" />
+          <span>Log Out</span>
+        </button>
+
+        <div className="mt-2 px-3 py-2 rounded-lg bg-slate-800/40 border border-slate-700/50 flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center gap-2">
             <Cloud className="h-3.5 w-3.5 text-cyan-400" />
             <span>pCloud Engine</span>

@@ -15,6 +15,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { PCloudFilesService } from './files.service';
+import { Roles } from '../../auth/roles.decorator';
 
 function currentOrgId(req: any): string {
   const orgId = req.user?.orgId;
@@ -52,6 +53,7 @@ export class PCloudFilesController {
   }
 
   @Post('upload')
+  @Roles('ADMIN', 'MEMBER')
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Upload a document directly to pCloud and register it' })
@@ -66,6 +68,7 @@ export class PCloudFilesController {
   }
 
   @Post('register')
+  @Roles('ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Register an existing pCloud file reference for use in campaigns' })
   async registerExisting(
     @Body() dto: { name: string; fileId: string; folderId?: string; fileSize?: number; mimeType?: string; pcloudAccountId?: string; pcloudPath?: string },
@@ -75,6 +78,7 @@ export class PCloudFilesController {
   }
 
   @Delete(':id')
+  @Roles('ADMIN')
   @ApiOperation({ summary: 'Delete a registered pCloud file record' })
   async remove(@Param('id') id: string, @Request() req: any) {
     return this.filesService.removeStoredFile(id, currentOrgId(req));

@@ -2,8 +2,20 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { createHmac, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { decryptProviderCredentials, encryptProviderCredentials } from './email.credentials';
+import { EmailAdapterFactory } from './adapters/email.factory';
+import { SendEmailPayload } from './adapters/email.adapter';
 
 interface OAuthState { orgId: string; userId: string; nonce: string; exp: number }
+
+export interface CreateCustomSmtpDto {
+  host: string;
+  port: number;
+  secure?: boolean;
+  user: string;
+  pass: string;
+  accountEmail: string;
+  fromName?: string;
+}
 
 @Injectable()
 export class EmailService {
@@ -35,6 +47,10 @@ export class EmailService {
     return Boolean(process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET && process.env.GMAIL_REDIRECT_URI);
   }
 
+  private microsoftConfigured() {
+    return Boolean(process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET && process.env.MICROSOFT_REDIRECT_URI);
+  }
+
   async list(organizationId: string) {
     const accounts = await this.prisma.emailAccount.findMany({
       where: { organizationId },
@@ -43,11 +59,65 @@ export class EmailService {
     return accounts.map(({ credentials, ...safe }) => ({ ...safe, hasCredentials: Boolean(credentials) }));
   }
 
+  async findVerified(id: string, organizationId: string) {
+    const account = await this.prisma.emailAccount.findFirst({
+      where: { id, organizationId, status: 'VERIFIED' },
+    });
+    if (!account) throw new NotFoundException(`Verified email sender ${id} not found`);
+    return account;
+  }
+
   async remove(id: string, organizationId: string) {
     const account = await this.prisma.emailAccount.findFirst({ where: { id, organizationId } });
     if (!account) throw new NotFoundException('Email account not found');
     await this.prisma.emailAccount.delete({ where: { id } });
     return { success: true };
+  }
+
+  async createCustomSmtp(organizationId: string, dto: CreateCustomSmtpDto) {
+    const adapter = EmailAdapterFactory.getAdapter('smtp');
+    const validation = await adapter.validateAccount(dto);
+    if (!validation.valid) {
+      throw new BadRequestException(`SMTP verification failed: ${validation.message}`);
+    }
+
+    const normalizedEmail = dto.accountEmail.trim().toLowerCase();
+    const existing = await this.prisma.emailAccount.findFirst({
+      where: { organizationId, accountEmail: normalizedEmail, provider: 'smtp' },
+    });
+
+    const encrypted = encryptProviderCredentials(JSON.stringify({
+      host: dto.host.trim(),
+      port: Number(dto.port) || 587,
+      secure: dto.secure,
+      user: dto.user.trim(),
+      pass: dto.pass,
+      accountEmail: normalizedEmail,
+      fromName: dto.fromName?.trim(),
+    }));
+
+    const data = {
+      organizationId,
+      provider: 'smtp',
+      accountEmail: normalizedEmail,
+      displayName: dto.fromName?.trim() || normalizedEmail,
+      status: 'VERIFIED',
+      credentials: encrypted,
+      lastVerifiedAt: new Date(),
+    };
+
+    const account = existing
+      ? await this.prisma.emailAccount.update({ where: { id: existing.id }, data })
+      : await this.prisma.emailAccount.create({ data });
+
+    return {
+      id: account.id,
+      accountEmail: account.accountEmail,
+      displayName: account.displayName,
+      provider: account.provider,
+      status: account.status,
+      lastVerifiedAt: account.lastVerifiedAt,
+    };
   }
 
   async gmailAuthUrl(organizationId: string, userId: string) {
@@ -90,19 +160,21 @@ export class EmailService {
     const profile = await profileResponse.json();
     if (!profileResponse.ok || !profile.email) throw new BadRequestException('Unable to verify Gmail mailbox identity');
 
-    const existing = await this.prisma.emailAccount.findFirst({ where: { organizationId: state.orgId, accountEmail: String(profile.email).toLowerCase(), provider: 'gmail' } });
+    const normalizedEmail = String(profile.email).toLowerCase();
+    const existing = await this.prisma.emailAccount.findFirst({ where: { organizationId: state.orgId, accountEmail: normalizedEmail, provider: 'gmail' } });
     const encrypted = encryptProviderCredentials(JSON.stringify({
       accessToken: token.access_token,
       refreshToken: token.refresh_token,
       expiresAt: Date.now() + Number(token.expires_in || 3600) * 1000,
       scope: token.scope,
       tokenType: token.token_type,
+      accountEmail: normalizedEmail,
     }));
 
     const data = {
       organizationId: state.orgId,
       provider: 'gmail',
-      accountEmail: String(profile.email).toLowerCase(),
+      accountEmail: normalizedEmail,
       displayName: profile.name || profile.email,
       status: 'VERIFIED',
       credentials: encrypted,
@@ -118,40 +190,36 @@ export class EmailService {
     return { accountId: account.id, email: account.accountEmail, provider: account.provider, status: account.status };
   }
 
-  async sendGmail(id: string, organizationId: string, payload: { to: string; subject: string; body: string }) {
-    const account = await this.prisma.emailAccount.findFirst({ where: { id, organizationId, provider: 'gmail', status: 'VERIFIED' } });
-    if (!account) throw new NotFoundException('Verified Gmail account not found');
+  async sendEmail(id: string, organizationId: string, payload: { to: string; subject: string; body: string; attachments?: any[] }) {
+    const account = await this.prisma.emailAccount.findFirst({ where: { id, organizationId, status: 'VERIFIED' } });
+    if (!account) throw new NotFoundException('Verified email sender account not found');
     const credentials = JSON.parse(decryptProviderCredentials(account.credentials));
-    let accessToken = credentials.accessToken as string;
 
-    if (credentials.expiresAt && Date.now() >= Number(credentials.expiresAt) - 60_000 && credentials.refreshToken) {
-      const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: process.env.GMAIL_CLIENT_ID!,
-          client_secret: process.env.GMAIL_CLIENT_SECRET!,
-          refresh_token: credentials.refreshToken,
-          grant_type: 'refresh_token',
-        }).toString(),
-      });
-      const refreshed = await refreshResponse.json();
-      if (!refreshResponse.ok || !refreshed.access_token) throw new BadRequestException('Gmail access token refresh failed');
-      accessToken = refreshed.access_token;
-      credentials.accessToken = accessToken;
-      credentials.expiresAt = Date.now() + Number(refreshed.expires_in || 3600) * 1000;
-      await this.prisma.emailAccount.update({ where: { id }, data: { credentials: encryptProviderCredentials(JSON.stringify(credentials)), lastVerifiedAt: new Date() } });
+    const adapter = EmailAdapterFactory.getAdapter(account.provider);
+    const sendPayload: SendEmailPayload = {
+      to: { email: payload.to },
+      subject: payload.subject,
+      body: payload.body,
+      attachments: payload.attachments,
+      accountCredentials: credentials,
+    };
+
+    const result = await adapter.sendEmail(sendPayload);
+    if (!result.success) {
+      throw new BadRequestException(result.error?.message || result.responseMessage || 'Email delivery failed');
     }
 
-    const headers = [`To: ${payload.to}`, `Subject: ${payload.subject}`, 'Content-Type: text/plain; charset="UTF-8"', '', payload.body].join('\r\n');
-    const raw = Buffer.from(headers).toString('base64url');
-    const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ raw }),
-    });
-    const result = await response.json();
-    if (!response.ok || !result.id) throw new BadRequestException(result.error?.message || 'Gmail send failed');
-    return { success: true, provider: 'gmail', messageId: result.id };
+    // If OAuth token was refreshed during sending, persist updated credentials
+    if (sendPayload.accountCredentials && JSON.stringify(sendPayload.accountCredentials) !== JSON.stringify(credentials)) {
+      await this.prisma.emailAccount.update({
+        where: { id },
+        data: {
+          credentials: encryptProviderCredentials(JSON.stringify(sendPayload.accountCredentials)),
+          lastVerifiedAt: new Date(),
+        },
+      });
+    }
+
+    return { success: true, provider: account.provider, messageId: result.messageId };
   }
 }
